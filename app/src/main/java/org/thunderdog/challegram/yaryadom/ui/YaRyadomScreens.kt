@@ -24,10 +24,6 @@ import org.thunderdog.challegram.yaryadom.data.models.Radii
  */
 object YaRyadomScreens {
 
-    // -------------------------------------------------------------------------
-    // Theme helpers
-    // -------------------------------------------------------------------------
-
     private data class Theme(
         val bg: Int,
         val cardBg: Int,
@@ -48,7 +44,7 @@ object YaRyadomScreens {
                 cardBg = Color.parseColor("#1C1C1E"),
                 textPrimary = Color.parseColor("#FFFFFF"),
                 textSecondary = Color.parseColor("#8E8E93"),
-                accent = Color.parseColor("#2AABEE"),          // Telegram blue
+                accent = Color.parseColor("#2AABEE"),
                 accentText = Color.WHITE,
                 divider = Color.parseColor("#2C2C2E"),
                 secondaryBtn = Color.parseColor("#2C2C2E")
@@ -66,10 +62,6 @@ object YaRyadomScreens {
             )
         }
     }
-
-    // -------------------------------------------------------------------------
-    // Public screens
-    // -------------------------------------------------------------------------
 
     fun createHomeView(
         context: Context,
@@ -129,7 +121,6 @@ object YaRyadomScreens {
 
         layout.addView(makeHeader(context, t, "Новая заявка", onBack))
 
-        // Категория
         layout.addView(makeLabel(context, t, "Категория"))
         val categorySpinner = Spinner(context)
         val categoryAdapter = ArrayAdapter(
@@ -141,7 +132,6 @@ object YaRyadomScreens {
         layout.addView(categorySpinner)
         layout.addView(space(context, 16))
 
-        // Описание
         layout.addView(makeLabel(context, t, "Описание"))
         val description = EditText(context).apply {
             hint = "Что нужно сделать?"
@@ -154,8 +144,7 @@ object YaRyadomScreens {
         layout.addView(description)
         layout.addView(space(context, 16))
 
-        // Куда (опционально)
-        layout.addView(makeLabel(context, t, "Куда (необязательно)")
+        layout.addView(makeLabel(context, t, "Куда (необязательно)"))
         val destination = EditText(context).apply {
             hint = "Адрес или ориентир"
             setTextColor(t.textPrimary)
@@ -166,7 +155,6 @@ object YaRyadomScreens {
         layout.addView(destination)
         layout.addView(space(context, 16))
 
-        // Радиус
         layout.addView(makeLabel(context, t, "Радиус поиска"))
         val radiusSpinner = Spinner(context)
         val radiusAdapter = ArrayAdapter(
@@ -175,12 +163,11 @@ object YaRyadomScreens {
             Radii.ALL.map { it.second }
         )
         radiusSpinner.adapter = radiusAdapter
-        radiusSpinner.setSelection(2) // 5 км по умолчанию
+        radiusSpinner.setSelection(2)
         layout.addView(radiusSpinner)
         layout.addView(space(context, 16))
 
-        // Срок
-        layout.addView(makeLabel(context, t, "Срок действия (минуты)")
+        layout.addView(makeLabel(context, t, "Срок действия (минуты)"))
         val expires = EditText(context).apply {
             setText("30")
             inputType = android.text.InputType.TYPE_CLASS_NUMBER
@@ -308,10 +295,6 @@ object YaRyadomScreens {
         ))
         return root
     }
-
-    // -------------------------------------------------------------------------
-    // Building blocks
-    // -------------------------------------------------------------------------
 
     private fun makeHeader(
         context: Context,
