@@ -1,7 +1,10 @@
 package org.thunderdog.challegram.yaryadom.ui
 
 import android.content.Context
+import android.content.res.Configuration
+import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -13,11 +16,60 @@ import org.thunderdog.challegram.yaryadom.data.models.NearbyItem
 import org.thunderdog.challegram.yaryadom.data.models.Radii
 
 /**
- * Простые UI-экраны модуля «Я рядом».
- * Используют стандартные Android View (без зависимости от внутренних View Telegram X).
- * При интеграции можно заменить на View Telegram X (CustomTextView и т.д.) для полного соответствия стилю.
+ * UI-экраны модуля «Я рядом».
+ *
+ * Используют стандартные Android View с адаптацией под светлую/тёмную тему.
+ * При глубокой интеграции в Telegram X рекомендуется заменить
+ * на компоненты TGX (CustomTextView, Theme-aware colors, etc.).
  */
 object YaRyadomScreens {
+
+    // -------------------------------------------------------------------------
+    // Theme helpers
+    // -------------------------------------------------------------------------
+
+    private data class Theme(
+        val bg: Int,
+        val cardBg: Int,
+        val textPrimary: Int,
+        val textSecondary: Int,
+        val accent: Int,
+        val accentText: Int,
+        val divider: Int,
+        val secondaryBtn: Int
+    )
+
+    private fun theme(context: Context): Theme {
+        val night = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+        return if (night) {
+            Theme(
+                bg = Color.parseColor("#0F0F0F"),
+                cardBg = Color.parseColor("#1C1C1E"),
+                textPrimary = Color.parseColor("#FFFFFF"),
+                textSecondary = Color.parseColor("#8E8E93"),
+                accent = Color.parseColor("#2AABEE"),          // Telegram blue
+                accentText = Color.WHITE,
+                divider = Color.parseColor("#2C2C2E"),
+                secondaryBtn = Color.parseColor("#2C2C2E")
+            )
+        } else {
+            Theme(
+                bg = Color.parseColor("#F2F2F7"),
+                cardBg = Color.WHITE,
+                textPrimary = Color.parseColor("#000000"),
+                textSecondary = Color.parseColor("#6D6D72"),
+                accent = Color.parseColor("#2AABEE"),
+                accentText = Color.WHITE,
+                divider = Color.parseColor("#E5E5EA"),
+                secondaryBtn = Color.parseColor("#E5E5EA")
+            )
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Public screens
+    // -------------------------------------------------------------------------
 
     fun createHomeView(
         context: Context,
@@ -25,35 +77,42 @@ object YaRyadomScreens {
         onCanClick: () -> Unit,
         onMyOrdersClick: () -> Unit
     ): View {
+        val t = theme(context)
         val layout = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(context, 24), dp(context, 32), dp(context, 24), dp(context, 24))
+            setBackgroundColor(t.bg)
+            setPadding(dp(context, 24), dp(context, 40), dp(context, 24), dp(context, 24))
             gravity = Gravity.CENTER_HORIZONTAL
         }
 
         val title = TextView(context).apply {
             text = "Я рядом"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 28f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 30f)
             setTypeface(null, Typeface.BOLD)
+            setTextColor(t.textPrimary)
             gravity = Gravity.CENTER
         }
 
         val subtitle = TextView(context).apply {
-            text = "Заявки рядом с вами"
+            text = "Локальные заявки рядом с вами"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setTextColor(t.textSecondary)
             gravity = Gravity.CENTER
-            setPadding(0, dp(context, 8), 0, dp(context, 32))
+            setPadding(0, dp(context, 8), 0, dp(context, 36))
         }
 
         layout.addView(title)
         layout.addView(subtitle)
-        layout.addView(makeButton(context, "Мне нужно", onNeedClick))
-        layout.addView(space(context, 12))
-        layout.addView(makeButton(context, "Я могу", onCanClick))
-        layout.addView(space(context, 12))
-        layout.addView(makeButton(context, "Мои заявки", onMyOrdersClick, secondary = true))
+        layout.addView(makePrimaryButton(context, t, "Мне нужно", onNeedClick))
+        layout.addView(space(context, 14))
+        layout.addView(makePrimaryButton(context, t, "Я могу", onCanClick))
+        layout.addView(space(context, 14))
+        layout.addView(makeSecondaryButton(context, t, "Мои заявки", onMyOrdersClick))
 
-        return ScrollView(context).apply { addView(layout) }
+        return ScrollView(context).apply {
+            setBackgroundColor(t.bg)
+            addView(layout)
+        }
     }
 
     fun createOrderFormView(
@@ -61,14 +120,17 @@ object YaRyadomScreens {
         onSubmit: (category: String, description: String, destination: String?, radius: Int, expires: Int) -> Unit,
         onBack: () -> Unit
     ): View {
+        val t = theme(context)
         val layout = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            setBackgroundColor(t.bg)
             setPadding(dp(context, 20), dp(context, 16), dp(context, 20), dp(context, 24))
         }
 
-        layout.addView(makeTitle(context, "Новая заявка"))
+        layout.addView(makeHeader(context, t, "Новая заявка", onBack))
 
-        layout.addView(makeLabel(context, "Категория"))
+        // Категория
+        layout.addView(makeLabel(context, t, "Категория"))
         val categorySpinner = Spinner(context)
         val categoryAdapter = ArrayAdapter(
             context,
@@ -79,62 +141,73 @@ object YaRyadomScreens {
         layout.addView(categorySpinner)
         layout.addView(space(context, 16))
 
-        layout.addView(makeLabel(context, "Что нужно"))
+        // Описание
+        layout.addView(makeLabel(context, t, "Описание"))
         val description = EditText(context).apply {
-            hint = "Кратко опишите задачу"
+            hint = "Что нужно сделать?"
+            setTextColor(t.textPrimary)
+            setHintTextColor(t.textSecondary)
             minLines = 3
-            setPadding(dp(context, 12), dp(context, 12), dp(context, 12), dp(context, 12))
+            setBackgroundColor(t.cardBg)
+            setPadding(dp(context, 12), dp(context, 10), dp(context, 12), dp(context, 10))
         }
         layout.addView(description)
         layout.addView(space(context, 16))
 
-        layout.addView(makeLabel(context, "Куда / адрес (необязательно)"))
+        // Куда (опционально)
+        layout.addView(makeLabel(context, t, "Куда (необязательно)")
         val destination = EditText(context).apply {
-            hint = "Например: метро Сокольники"
-            setPadding(dp(context, 12), dp(context, 12), dp(context, 12), dp(context, 12))
+            hint = "Адрес или ориентир"
+            setTextColor(t.textPrimary)
+            setHintTextColor(t.textSecondary)
+            setBackgroundColor(t.cardBg)
+            setPadding(dp(context, 12), dp(context, 10), dp(context, 12), dp(context, 10))
         }
         layout.addView(destination)
         layout.addView(space(context, 16))
 
-        layout.addView(makeLabel(context, "Радиус поиска"))
+        // Радиус
+        layout.addView(makeLabel(context, t, "Радиус поиска"))
         val radiusSpinner = Spinner(context)
-        radiusSpinner.adapter = ArrayAdapter(
+        val radiusAdapter = ArrayAdapter(
             context,
             android.R.layout.simple_spinner_dropdown_item,
             Radii.ALL.map { it.second }
         )
-        radiusSpinner.setSelection(2)
+        radiusSpinner.adapter = radiusAdapter
+        radiusSpinner.setSelection(2) // 5 км по умолчанию
         layout.addView(radiusSpinner)
         layout.addView(space(context, 16))
 
-        layout.addView(makeLabel(context, "Актуально (минуты)"))
-        val expiresSpinner = Spinner(context)
-        val expiresOptions = listOf(15, 30, 60, 120, 240, 480)
-        expiresSpinner.adapter = ArrayAdapter(
-            context,
-            android.R.layout.simple_spinner_dropdown_item,
-            expiresOptions.map { "$it мин" }
-        )
-        expiresSpinner.setSelection(1)
-        layout.addView(expiresSpinner)
-        layout.addView(space(context, 24))
+        // Срок
+        layout.addView(makeLabel(context, t, "Срок действия (минуты)")
+        val expires = EditText(context).apply {
+            setText("30")
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setTextColor(t.textPrimary)
+            setBackgroundColor(t.cardBg)
+            setPadding(dp(context, 12), dp(context, 10), dp(context, 12), dp(context, 10))
+        }
+        layout.addView(expires)
+        layout.addView(space(context, 28))
 
-        layout.addView(makeButton(context, "Создать заявку") {
-            val catCode = Categories.ALL[categorySpinner.selectedItemPosition].first
+        layout.addView(makePrimaryButton(context, t, "Создать заявку") {
+            val catCode = Categories.ALL.getOrNull(categorySpinner.selectedItemPosition)?.first ?: "OTHER"
             val desc = description.text.toString().trim()
-            val dest = destination.text.toString().trim().ifEmpty { null }
-            val radius = Radii.ALL[radiusSpinner.selectedItemPosition].first
-            val expires = expiresOptions[expiresSpinner.selectedItemPosition]
             if (desc.length < 3) {
-                Toast.makeText(context, "Опишите, что нужно (минимум 3 символа)", Toast.LENGTH_SHORT).show()
-                return@makeButton
+                Toast.makeText(context, "Описание слишком короткое", Toast.LENGTH_SHORT).show()
+                return@makePrimaryButton
             }
-            onSubmit(catCode, desc, dest, radius, expires)
+            val dest = destination.text.toString().trim().ifEmpty { null }
+            val rad = Radii.ALL.getOrNull(radiusSpinner.selectedItemPosition)?.first ?: 5000
+            val exp = expires.text.toString().toIntOrNull()?.coerceIn(5, 1440) ?: 30
+            onSubmit(catCode, desc, dest, rad, exp)
         })
-        layout.addView(space(context, 12))
-        layout.addView(makeButton(context, "Назад", onBack, secondary = true))
 
-        return ScrollView(context).apply { addView(layout) }
+        return ScrollView(context).apply {
+            setBackgroundColor(t.bg)
+            addView(layout)
+        }
     }
 
     fun createNearbyListView(
@@ -144,32 +217,47 @@ object YaRyadomScreens {
         onRefresh: () -> Unit,
         onBack: () -> Unit
     ): View {
-        val layout = LinearLayout(context).apply {
+        val t = theme(context)
+        val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(context, 16), dp(context, 16), dp(context, 16), dp(context, 16))
+            setBackgroundColor(t.bg)
         }
 
-        layout.addView(makeTitle(context, "Рядом с вами"))
+        root.addView(makeHeader(context, t, "Рядом со мной", onBack, onRefresh))
 
         if (items.isEmpty()) {
-            layout.addView(TextView(context).apply {
-                text = "Нет открытых заявок рядом.\nПопробуйте увеличить радиус или обновить."
-                setPadding(0, dp(context, 24), 0, dp(context, 24))
+            val empty = TextView(context).apply {
+                text = "Нет открытых заявок в выбранном радиусе"
+                setTextColor(t.textSecondary)
                 gravity = Gravity.CENTER
-            })
-        } else {
-            items.forEach { item ->
-                layout.addView(createOrderCard(context, item, onTake))
-                layout.addView(space(context, 10))
+                setPadding(dp(context, 24), dp(context, 48), dp(context, 24), 0)
             }
+            root.addView(empty)
+            return root
         }
 
-        layout.addView(space(context, 16))
-        layout.addView(makeButton(context, "Обновить", onRefresh))
-        layout.addView(space(context, 8))
-        layout.addView(makeButton(context, "Назад", onBack, secondary = true))
+        val list = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(context, 12), dp(context, 8), dp(context, 12), dp(context, 16))
+        }
 
-        return ScrollView(context).apply { addView(layout) }
+        for (item in items) {
+            list.addView(makeOrderCard(context, t, item, showTake = true) {
+                onTake(item.id)
+            })
+            list.addView(space(context, 10))
+        }
+
+        val scroll = ScrollView(context).apply {
+            setBackgroundColor(t.bg)
+            addView(list)
+        }
+        root.addView(scroll, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            0,
+            1f
+        ))
+        return root
     }
 
     fun createMyOrdersView(
@@ -178,135 +266,246 @@ object YaRyadomScreens {
         onComplete: (String) -> Unit,
         onBack: () -> Unit
     ): View {
-        val layout = LinearLayout(context).apply {
+        val t = theme(context)
+        val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(context, 16), dp(context, 16), dp(context, 16), dp(context, 16))
+            setBackgroundColor(t.bg)
         }
 
-        layout.addView(makeTitle(context, "Мои заявки"))
+        root.addView(makeHeader(context, t, "Мои заявки", onBack))
 
         if (items.isEmpty()) {
-            layout.addView(TextView(context).apply {
-                text = "У вас нет активных взятых заявок."
-                setPadding(0, dp(context, 24), 0, dp(context, 24))
+            val empty = TextView(context).apply {
+                text = "У вас пока нет взятых заявок"
+                setTextColor(t.textSecondary)
                 gravity = Gravity.CENTER
-            })
-        } else {
-            items.forEach { item ->
-                val card = LinearLayout(context).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(dp(context, 14), dp(context, 14), dp(context, 14), dp(context, 14))
-                    setBackgroundColor(0xFFF5F5F5.toInt())
-                }
-                card.addView(TextView(context).apply {
-                    text = Categories.label(item.category)
-                    setTypeface(null, Typeface.BOLD)
-                })
-                card.addView(TextView(context).apply {
-                    text = item.description
-                    setPadding(0, dp(context, 6), 0, 0)
-                })
-                item.destinationText?.let {
-                    card.addView(TextView(context).apply {
-                        text = "→ $it"
-                        setPadding(0, dp(context, 4), 0, 0)
-                    })
-                }
-                card.addView(TextView(context).apply {
-                    text = "Заказчик: ${item.creatorName}${item.creatorUsername?.let { " @$it" } ?: ""}"
-                    setPadding(0, dp(context, 6), 0, 0)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                })
-                card.addView(space(context, 10))
-                card.addView(makeButton(context, "Завершить") { onComplete(item.id) })
-                layout.addView(card)
-                layout.addView(space(context, 10))
+                setPadding(dp(context, 24), dp(context, 48), dp(context, 24), 0)
             }
+            root.addView(empty)
+            return root
         }
 
-        layout.addView(space(context, 16))
-        layout.addView(makeButton(context, "Назад", onBack, secondary = true))
-
-        return ScrollView(context).apply { addView(layout) }
-    }
-
-    private fun createOrderCard(context: Context, item: NearbyItem, onTake: (String) -> Unit): View {
-        return LinearLayout(context).apply {
+        val list = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(context, 14), dp(context, 14), dp(context, 14), dp(context, 14))
-            setBackgroundColor(0xFFF5F5F5.toInt())
+            setPadding(dp(context, 12), dp(context, 8), dp(context, 12), dp(context, 16))
+        }
 
-            addView(TextView(context).apply {
-                text = Categories.label(item.category)
-                setTypeface(null, Typeface.BOLD)
+        for (item in items) {
+            list.addView(makeMineCard(context, t, item) {
+                onComplete(item.id)
             })
-            addView(TextView(context).apply {
-                text = item.description
-                setPadding(0, dp(context, 6), 0, 0)
-            })
-            item.destinationText?.let {
-                addView(TextView(context).apply {
-                    text = "→ $it"
-                    setPadding(0, dp(context, 4), 0, 0)
-                })
+            list.addView(space(context, 10))
+        }
+
+        val scroll = ScrollView(context).apply {
+            setBackgroundColor(t.bg)
+            addView(list)
+        }
+        root.addView(scroll, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            0,
+            1f
+        ))
+        return root
+    }
+
+    // -------------------------------------------------------------------------
+    // Building blocks
+    // -------------------------------------------------------------------------
+
+    private fun makeHeader(
+        context: Context,
+        t: Theme,
+        title: String,
+        onBack: () -> Unit,
+        onAction: (() -> Unit)? = null
+    ): View {
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(context, 8), dp(context, 12), dp(context, 8), dp(context, 12))
+            setBackgroundColor(t.cardBg)
+        }
+
+        val back = TextView(context).apply {
+            text = "←"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            setTextColor(t.accent)
+            setPadding(dp(context, 12), dp(context, 4), dp(context, 12), dp(context, 4))
+            setOnClickListener { onBack() }
+        }
+
+        val titleView = TextView(context).apply {
+            text = title
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(t.textPrimary)
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        row.addView(back)
+        row.addView(titleView)
+
+        if (onAction != null) {
+            val action = TextView(context).apply {
+                text = "↻"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+                setTextColor(t.accent)
+                setPadding(dp(context, 12), dp(context, 4), dp(context, 12), dp(context, 4))
+                setOnClickListener { onAction() }
             }
-            val dist = item.distanceMeters?.let {
-                if (it < 1000) "$it м" else String.format("%.1f км", it / 1000.0)
-            } ?: ""
-            addView(TextView(context).apply {
-                text = "$dist · ${item.creatorName}"
-                setPadding(0, dp(context, 6), 0, 0)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            })
-            addView(space(context, 10))
-            addView(makeButton(context, "Взять") { onTake(item.id) })
+            row.addView(action)
+        }
+
+        return row
+    }
+
+    private fun makeOrderCard(
+        context: Context,
+        t: Theme,
+        item: NearbyItem,
+        showTake: Boolean,
+        onAction: () -> Unit
+    ): View {
+        val card = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            background = roundRect(t.cardBg, dp(context, 12).toFloat())
+            setPadding(dp(context, 16), dp(context, 14), dp(context, 16), dp(context, 14))
+        }
+
+        val cat = TextView(context).apply {
+            text = Categories.label(item.category)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(t.accent)
+            setTypeface(null, Typeface.BOLD)
+        }
+
+        val desc = TextView(context).apply {
+            text = item.description
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextColor(t.textPrimary)
+            setPadding(0, dp(context, 4), 0, dp(context, 6))
+        }
+
+        val meta = TextView(context).apply {
+            val dist = item.distanceMeters?.let { "${it} м · " } ?: ""
+            text = "$dist${item.creatorName}"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(t.textSecondary)
+        }
+
+        card.addView(cat)
+        card.addView(desc)
+        card.addView(meta)
+
+        if (showTake) {
+            card.addView(space(context, 12))
+            card.addView(makePrimaryButton(context, t, "Взять заявку", onAction))
+        }
+
+        return card
+    }
+
+    private fun makeMineCard(
+        context: Context,
+        t: Theme,
+        item: MineItem,
+        onComplete: () -> Unit
+    ): View {
+        val card = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            background = roundRect(t.cardBg, dp(context, 12).toFloat())
+            setPadding(dp(context, 16), dp(context, 14), dp(context, 16), dp(context, 14))
+        }
+
+        val cat = TextView(context).apply {
+            text = Categories.label(item.category)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(t.accent)
+            setTypeface(null, Typeface.BOLD)
+        }
+
+        val desc = TextView(context).apply {
+            text = item.description
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextColor(t.textPrimary)
+            setPadding(0, dp(context, 4), 0, dp(context, 6))
+        }
+
+        val meta = TextView(context).apply {
+            val uname = item.creatorUsername?.let { " @$it" } ?: ""
+            text = "${item.creatorName}$uname · ${item.status}"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(t.textSecondary)
+        }
+
+        card.addView(cat)
+        card.addView(desc)
+        card.addView(meta)
+
+        if (item.status == "TAKEN") {
+            card.addView(space(context, 12))
+            card.addView(makePrimaryButton(context, t, "Завершить", onComplete))
+        }
+
+        return card
+    }
+
+    private fun makePrimaryButton(context: Context, t: Theme, text: String, onClick: () -> Unit): View {
+        return TextView(context).apply {
+            this.text = text
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(t.accentText)
+            gravity = Gravity.CENTER
+            background = roundRect(t.accent, dp(context, 10).toFloat())
+            setPadding(dp(context, 16), dp(context, 14), dp(context, 16), dp(context, 14))
+            setOnClickListener { onClick() }
         }
     }
 
-    private fun makeTitle(context: Context, text: String) = TextView(context).apply {
-        this.text = text
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-        setTypeface(null, Typeface.BOLD)
-        setPadding(0, 0, 0, dp(context, 20))
-    }
-
-    private fun makeLabel(context: Context, text: String) = TextView(context).apply {
-        this.text = text
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-        setPadding(0, 0, 0, dp(context, 6))
-    }
-
-    private fun makeButton(
-        context: Context,
-        text: String,
-        onClick: () -> Unit,
-        secondary: Boolean = false
-    ): Button {
-        return Button(context).apply {
+    private fun makeSecondaryButton(context: Context, t: Theme, text: String, onClick: () -> Unit): View {
+        return TextView(context).apply {
             this.text = text
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextColor(t.textPrimary)
+            gravity = Gravity.CENTER
+            background = roundRect(t.secondaryBtn, dp(context, 10).toFloat())
+            setPadding(dp(context, 16), dp(context, 14), dp(context, 16), dp(context, 14))
             setOnClickListener { onClick() }
-            if (secondary) {
-                setBackgroundColor(0xFFE0E0E0.toInt())
-                setTextColor(0xFF333333.toInt())
-            }
+        }
+    }
+
+    private fun makeLabel(context: Context, t: Theme, text: String): TextView {
+        return TextView(context).apply {
+            this.text = text
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(t.textSecondary)
+            setPadding(0, 0, 0, dp(context, 6))
+        }
+    }
+
+    private fun space(context: Context, dp: Int): View {
+        return View(context).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                dp(context, dp)
             )
         }
     }
 
-    private fun space(context: Context, dp: Int) = View(context).apply {
-        layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(context, dp)
-        )
+    private fun roundRect(color: Int, radius: Float): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = radius
+        }
     }
 
-    private fun dp(context: Context, value: Int): Int =
-        TypedValue.applyDimension(
+    private fun dp(context: Context, value: Int): Int {
+        return TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
             value.toFloat(),
             context.resources.displayMetrics
         ).toInt()
+    }
 }
