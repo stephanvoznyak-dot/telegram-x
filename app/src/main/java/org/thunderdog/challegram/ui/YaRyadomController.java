@@ -33,8 +33,7 @@ public class YaRyadomController extends ViewController<Void> {
 
   @Override
   public int getId () {
-    // После добавления в ids.xml замените на R.id.controller_yaryadom
-    return R.id.controller_settings;
+    return R.id.controller_yaryadom;
   }
 
   @Override
