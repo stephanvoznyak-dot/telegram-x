@@ -1,6 +1,8 @@
 /*
  * Telegram X + «Я рядом»
- * Поиск, размещение, избранное, чат с автором через TDLib.
+ *
+ * Объявления = каналы с геометкой.
+ * Поиск = TdApi.SearchChatsNearby.
  */
 package org.thunderdog.challegram.ui;
 
@@ -18,9 +20,6 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.Nullable;
-
-import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.navigation.BackHeaderButton;
 import org.thunderdog.challegram.navigation.ViewController;
@@ -32,57 +31,27 @@ import org.thunderdog.challegram.tool.UI;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import me.vkryl.android.widget.FrameLayoutFix;
 import me.vkryl.core.StringUtils;
 
 public class YaRyadomController extends ViewController<Void> {
 
-  private static final AtomicInteger ID_SEQ = new AtomicInteger(1);
+  // Координаты поиска по умолчанию (можно менять в полях)
+  private static final double DEFAULT_LAT = 59.437;
+  private static final double DEFAULT_LNG = 24.7535;
 
-  private static class Listing {
-    final String id;
-    final String title;
-    final String price;
-    final String meta;
-    final String district;
-    @Nullable final String authorUsername;
-    final long authorUserId;
+  private final List<YaRyadomGeo.Listing> listings = new ArrayList<>();
+  private final List<Long> favoriteIds = new ArrayList<>();
 
-    Listing (String id, String title, String price, String meta, String district,
-             @Nullable String authorUsername, long authorUserId) {
-      this.id = id;
-      this.title = title;
-      this.price = price;
-      this.meta = meta;
-      this.district = district;
-      this.authorUsername = authorUsername;
-      this.authorUserId = authorUserId;
-    }
-
-    static Listing create (String title, String price, String meta, String district,
-                           @Nullable String authorUsername, long authorUserId) {
-      return new Listing("yr_" + ID_SEQ.getAndIncrement(), title, price, meta, district,
-        authorUsername, authorUserId);
-    }
-  }
-
-  private final List<Listing> listings = new ArrayList<>();
   private LinearLayout listContainer;
-  private EditText searchInput;
+  private EditText latInput;
+  private EditText lngInput;
+  private TextView statusText;
+  private TextView favBtn;
 
   public YaRyadomController (Context context, Tdlib tdlib) {
     super(context, tdlib);
-    seedDemoListings();
-  }
-
-  private void seedDemoListings () {
-    listings.add(Listing.create("2-комн. квартира у метро", "45 000 ₽/мес", "45 м² · 2/9 эт.", "Центр", "telegram", 0));
-    listings.add(Listing.create("Студия с ремонтом", "28 000 ₽/мес", "28 м² · 5/12 эт.", "Север", "durov", 0));
-    listings.add(Listing.create("3-комн. семейная", "62 000 ₽/мес", "78 м² · 3/5 эт.", "Юг", "telegram", 0));
-    listings.add(Listing.create("Комната в квартире", "18 000 ₽/мес", "16 м² · 7/9 эт.", "Восток", null, 0));
-    listings.add(Listing.create("1-комн. новостройка", "38 000 ₽/мес", "36 м² · 10/16 эт.", "Запад", "telegram", 0));
   }
 
   @Override
@@ -112,30 +81,38 @@ public class YaRyadomController extends ViewController<Void> {
 
     int pad = Screen.dp(12f);
 
-    LinearLayout searchBar = new LinearLayout(context);
-    searchBar.setOrientation(LinearLayout.HORIZONTAL);
-    searchBar.setGravity(Gravity.CENTER_VERTICAL);
-    searchBar.setPadding(pad, pad, pad, pad);
+    // —— Координаты поиска ——
+    TextView geoLabel = new TextView(context);
+    geoLabel.setText("Поиск каналов с геометкой рядом с точкой");
+    geoLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+    geoLabel.setTextColor(Theme.getColor(ColorId.textLight));
+    geoLabel.setPadding(pad, pad, pad, Screen.dp(4f));
+    root.addView(geoLabel);
 
-    searchInput = new EditText(context);
-    searchInput.setHint("Город, район, метро…");
-    searchInput.setInputType(InputType.TYPE_CLASS_TEXT);
-    searchInput.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
-    searchInput.setTextColor(Theme.getColor(ColorId.text));
-    searchInput.setHintTextColor(Theme.getColor(ColorId.textLight));
-    searchInput.setBackgroundColor(Theme.getColor(ColorId.filling));
-    searchInput.setPadding(Screen.dp(14f), Screen.dp(12f), Screen.dp(14f), Screen.dp(12f));
-    searchInput.setSingleLine(true);
-    searchBar.addView(searchInput, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+    LinearLayout coords = new LinearLayout(context);
+    coords.setOrientation(LinearLayout.HORIZONTAL);
+    coords.setPadding(pad, 0, pad, pad);
+    coords.setGravity(Gravity.CENTER_VERTICAL);
+
+    latInput = coordField(context, "Широта");
+    latInput.setText(String.valueOf(DEFAULT_LAT));
+    coords.addView(latInput, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+    lngInput = coordField(context, "Долгота");
+    lngInput.setText(String.valueOf(DEFAULT_LNG));
+    LinearLayout.LayoutParams lngLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    lngLp.leftMargin = Screen.dp(8f);
+    coords.addView(lngInput, lngLp);
 
     TextView searchBtn = makeButton(context, "Найти", true);
-    searchBtn.setOnClickListener(v -> filterListings());
-    LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+    searchBtn.setOnClickListener(v -> runNearbySearch());
+    LinearLayout.LayoutParams sLp = new LinearLayout.LayoutParams(
       ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-    btnLp.leftMargin = Screen.dp(8f);
-    searchBar.addView(searchBtn, btnLp);
-    root.addView(searchBar);
+    sLp.leftMargin = Screen.dp(8f);
+    coords.addView(searchBtn, sLp);
+    root.addView(coords);
 
+    // —— Действия ——
     LinearLayout actions = new LinearLayout(context);
     actions.setOrientation(LinearLayout.HORIZONTAL);
     actions.setPadding(pad, 0, pad, pad);
@@ -144,12 +121,19 @@ public class YaRyadomController extends ViewController<Void> {
     placeBtn.setOnClickListener(v -> openCreateForm());
     actions.addView(placeBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-    TextView favBtn = makeButton(context, favoritesButtonLabel(), false);
-    favBtn.setOnClickListener(v -> navigateTo(new YaRyadomFavoritesController(context, tdlib)));
+    favBtn = makeButton(context, "Избранное", false);
+    favBtn.setOnClickListener(v -> openFavorites());
     LinearLayout.LayoutParams favLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
     favLp.leftMargin = Screen.dp(8f);
     actions.addView(favBtn, favLp);
     root.addView(actions);
+
+    statusText = new TextView(context);
+    statusText.setText("Нажмите «Найти», чтобы загрузить каналы рядом");
+    statusText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+    statusText.setTextColor(Theme.getColor(ColorId.textLight));
+    statusText.setPadding(pad, 0, pad, pad);
+    root.addView(statusText);
 
     ScrollView scroll = new ScrollView(context);
     scroll.setLayoutParams(new LinearLayout.LayoutParams(
@@ -161,22 +145,26 @@ public class YaRyadomController extends ViewController<Void> {
     scroll.addView(listContainer);
     root.addView(scroll);
 
-    renderListings(listings);
+    // Загрузить избранное из Saved Messages и сразу поиск
+    reloadFavorites(() -> runNearbySearch());
+
     return root;
   }
 
-  @Override
-  public void onFocus () {
-    super.onFocus();
-    // обновить список (звёздочки) после возврата из избранного
-    if (listContainer != null) {
-      filterListings();
-    }
-  }
-
-  private String favoritesButtonLabel () {
-    int n = YaRyadomFavorites.count();
-    return n > 0 ? ("Избранное (" + n + ")") : "Избранное";
+  private EditText coordField (Context context, String hint) {
+    EditText edit = new EditText(context);
+    edit.setHint(hint);
+    edit.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL | InputType.TYPE_NUMBER_FLAG_SIGNED);
+    edit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
+    edit.setTextColor(Theme.getColor(ColorId.text));
+    edit.setHintTextColor(Theme.getColor(ColorId.textLight));
+    edit.setSingleLine(true);
+    edit.setPadding(Screen.dp(10f), Screen.dp(10f), Screen.dp(10f), Screen.dp(10f));
+    GradientDrawable bg = new GradientDrawable();
+    bg.setCornerRadius(Screen.dp(8f));
+    bg.setColor(Theme.getColor(ColorId.filling));
+    edit.setBackground(bg);
+    return edit;
   }
 
   private TextView makeButton (Context context, String text, boolean primary) {
@@ -185,7 +173,7 @@ public class YaRyadomController extends ViewController<Void> {
     btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
     btn.setTypeface(Typeface.DEFAULT_BOLD);
     btn.setGravity(Gravity.CENTER);
-    btn.setPadding(Screen.dp(16f), Screen.dp(12f), Screen.dp(16f), Screen.dp(12f));
+    btn.setPadding(Screen.dp(14f), Screen.dp(12f), Screen.dp(14f), Screen.dp(12f));
 
     GradientDrawable bg = new GradientDrawable();
     bg.setCornerRadius(Screen.dp(10f));
@@ -200,43 +188,52 @@ public class YaRyadomController extends ViewController<Void> {
     return btn;
   }
 
-  private void filterListings () {
-    String q = searchInput != null && searchInput.getText() != null
-      ? searchInput.getText().toString().trim().toLowerCase() : "";
-    if (q.isEmpty()) {
-      renderListings(listings);
+  private void runNearbySearch () {
+    double lat, lng;
+    try {
+      lat = Double.parseDouble(textOf(latInput).replace(',', '.'));
+      lng = Double.parseDouble(textOf(lngInput).replace(',', '.'));
+    } catch (Exception e) {
+      UI.showToast("Укажите координаты", Toast.LENGTH_SHORT);
       return;
     }
-    List<Listing> filtered = new ArrayList<>();
-    for (Listing l : listings) {
-      if (l.title.toLowerCase().contains(q)
-        || l.district.toLowerCase().contains(q)
-        || l.meta.toLowerCase().contains(q)
-        || l.price.toLowerCase().contains(q)) {
-        filtered.add(l);
+
+    statusText.setText("Ищем каналы с геометкой…");
+    listContainer.removeAllViews();
+
+    YaRyadomGeo.searchNearby(tdlib, lat, lng,
+      result -> {
+        listings.clear();
+        listings.addAll(result);
+        statusText.setText(result.isEmpty()
+          ? "Рядом нет каналов с геометкой"
+          : ("Найдено: " + result.size()));
+        renderListings(listings);
+      },
+      error -> {
+        statusText.setText("Ошибка поиска: " + error);
+        UI.showToast(error, Toast.LENGTH_LONG);
       }
-    }
-    renderListings(filtered);
+    );
   }
 
-  private void renderListings (List<Listing> data) {
-    if (listContainer == null) return;
+  private void renderListings (List<YaRyadomGeo.Listing> data) {
     listContainer.removeAllViews();
     if (data.isEmpty()) {
       TextView empty = new TextView(context);
-      empty.setText("Ничего не найдено");
+      empty.setText("Ничего не найдено.\nСоздайте канал-объявление кнопкой «+ Разместить».");
       empty.setTextColor(Theme.getColor(ColorId.textLight));
       empty.setGravity(Gravity.CENTER);
-      empty.setPadding(0, Screen.dp(40f), 0, 0);
+      empty.setPadding(0, Screen.dp(32f), 0, 0);
       listContainer.addView(empty);
       return;
     }
-    for (Listing listing : data) {
-      listContainer.addView(createListingCard(context, listing));
+    for (YaRyadomGeo.Listing listing : data) {
+      listContainer.addView(createCard(listing));
     }
   }
 
-  private View createListingCard (Context context, Listing listing) {
+  private View createCard (YaRyadomGeo.Listing listing) {
     LinearLayout card = new LinearLayout(context);
     card.setOrientation(LinearLayout.VERTICAL);
     card.setPadding(Screen.dp(14f), Screen.dp(14f), Screen.dp(14f), Screen.dp(14f));
@@ -262,98 +259,108 @@ public class YaRyadomController extends ViewController<Void> {
     title.setTextColor(Theme.getColor(ColorId.text));
     row.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-    TextView price = new TextView(context);
-    price.setText(listing.price);
-    price.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
-    price.setTypeface(Typeface.DEFAULT_BOLD);
-    price.setTextColor(0xFF0088CC);
-    row.addView(price);
+    if (listing.distanceMeters >= 0) {
+      TextView dist = new TextView(context);
+      dist.setText(listing.distanceLabel());
+      dist.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+      dist.setTextColor(0xFF0088CC);
+      dist.setTypeface(Typeface.DEFAULT_BOLD);
+      row.addView(dist);
+    }
     card.addView(row);
 
-    TextView meta = new TextView(context);
-    meta.setText(listing.meta + " · " + listing.district);
-    meta.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
-    meta.setTextColor(Theme.getColor(ColorId.textLight));
-    meta.setPadding(0, Screen.dp(6f), 0, Screen.dp(10f));
-    card.addView(meta);
+    String subtitle = listing.address;
+    if (StringUtils.isEmpty(subtitle) && (listing.latitude != 0 || listing.longitude != 0)) {
+      subtitle = String.format("%.5f, %.5f", listing.latitude, listing.longitude);
+    }
+    if (!StringUtils.isEmpty(subtitle)) {
+      TextView meta = new TextView(context);
+      meta.setText(subtitle);
+      meta.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+      meta.setTextColor(Theme.getColor(ColorId.textLight));
+      meta.setPadding(0, Screen.dp(6f), 0, Screen.dp(10f));
+      card.addView(meta);
+    }
 
     LinearLayout buttons = new LinearLayout(context);
     buttons.setOrientation(LinearLayout.HORIZONTAL);
 
-    boolean fav = YaRyadomFavorites.isFavorite(listing.id);
-    TextView starBtn = makeButton(context, fav ? "★ В избранном" : "☆ В избранное", false);
-    starBtn.setOnClickListener(v -> {
-      YaRyadomFavorites.toggle(new YaRyadomFavorites.Item(
-        listing.id, listing.title, listing.price, listing.meta, listing.district,
-        listing.authorUsername, listing.authorUserId
-      ));
-      boolean now = YaRyadomFavorites.isFavorite(listing.id);
-      UI.showToast(now ? "Добавлено в избранное" : "Удалено из избранного", Toast.LENGTH_SHORT);
-      filterListings();
-    });
+    boolean isFav = favoriteIds.contains(listing.chatId);
+    TextView starBtn = makeButton(context, isFav ? "★ В избранном" : "☆ В избранное", false);
+    starBtn.setOnClickListener(v -> toggleFavorite(listing));
     buttons.addView(starBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-    TextView contactBtn = makeButton(context, "Написать", true);
-    contactBtn.setOnClickListener(v -> openChatWithAuthor(listing));
-    LinearLayout.LayoutParams contactLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-    contactLp.leftMargin = Screen.dp(8f);
-    buttons.addView(contactBtn, contactLp);
+    TextView openBtn = makeButton(context, "Открыть", true);
+    openBtn.setOnClickListener(v -> tdlib.ui().openChat(this, listing.chatId, null));
+    LinearLayout.LayoutParams openLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    openLp.leftMargin = Screen.dp(8f);
+    buttons.addView(openBtn, openLp);
 
     card.addView(buttons);
     return card;
   }
 
+  private void toggleFavorite (YaRyadomGeo.Listing listing) {
+    if (favoriteIds.contains(listing.chatId)) {
+      favoriteIds.remove(listing.chatId);
+      UI.showToast("Удалено из избранного", Toast.LENGTH_SHORT);
+    } else {
+      favoriteIds.add(listing.chatId);
+      UI.showToast("Добавлено в избранное", Toast.LENGTH_SHORT);
+    }
+    updateFavButton();
+    YaRyadomGeo.saveFavoriteChatIds(tdlib, new ArrayList<>(favoriteIds), null);
+    renderListings(listings);
+  }
+
+  private void reloadFavorites (Runnable after) {
+    YaRyadomGeo.loadFavoriteChatIds(tdlib, ids -> {
+      favoriteIds.clear();
+      favoriteIds.addAll(ids);
+      updateFavButton();
+      if (after != null) after.run();
+    });
+  }
+
+  private void updateFavButton () {
+    if (favBtn != null) {
+      int n = favoriteIds.size();
+      favBtn.setText(n > 0 ? ("Избранное (" + n + ")") : "Избранное");
+    }
+  }
+
+  private void openFavorites () {
+    // Показать только избранные из текущего списка + попытаться открыть по id
+    List<YaRyadomGeo.Listing> fav = new ArrayList<>();
+    for (YaRyadomGeo.Listing l : listings) {
+      if (favoriteIds.contains(l.chatId)) fav.add(l);
+    }
+    // Для id, которых нет в текущем поиске — карточки-заглушки
+    for (Long id : favoriteIds) {
+      boolean found = false;
+      for (YaRyadomGeo.Listing l : fav) {
+        if (l.chatId == id) { found = true; break; }
+      }
+      if (!found && id != null) {
+        String title = tdlib.chatTitle(id);
+        if (StringUtils.isEmpty(title)) title = "Канал " + id;
+        fav.add(new YaRyadomGeo.Listing(id, title, "", 0, 0, -1));
+      }
+    }
+    statusText.setText("Избранное: " + fav.size());
+    renderListings(fav);
+  }
+
   private void openCreateForm () {
     YaRyadomCreateController form = new YaRyadomCreateController(context, tdlib);
-    form.setListener((title, price, area, floor, district, description) -> {
-      String meta = buildMeta(area, floor);
-      String districtVal = StringUtils.isEmpty(district) ? "—" : district;
-      String priceVal = price.contains("₽") ? price : (price + " ₽/мес");
-
-      String myUsername = null;
-      long myUserId = 0;
-      try {
-        myUserId = tdlib.myUserId();
-        TdApi.User me = tdlib.myUser();
-        if (me != null && me.usernames != null) {
-          if (!StringUtils.isEmpty(me.usernames.editableUsername)) {
-            myUsername = me.usernames.editableUsername;
-          } else if (me.usernames.activeUsernames != null && me.usernames.activeUsernames.length > 0) {
-            myUsername = me.usernames.activeUsernames[0];
-          }
-        }
-      } catch (Throwable ignored) {
-      }
-
-      Listing created = Listing.create(title, priceVal, meta, districtVal, myUsername, myUserId);
-      listings.add(0, created);
-      renderListings(listings);
-      UI.showToast("Объявление опубликовано", Toast.LENGTH_SHORT);
+    form.setListener((chatId, title) -> {
+      // После создания — обновить поиск
+      runNearbySearch();
     });
     navigateTo(form);
   }
 
-  private static String buildMeta (String area, String floor) {
-    String a = StringUtils.isEmpty(area) ? "—" : (area + " м²");
-    String f = StringUtils.isEmpty(floor) ? "—" : (floor + " эт.");
-    return a + " · " + f;
-  }
-
-  private void openChatWithAuthor (Listing listing) {
-    if (tdlib == null) {
-      UI.showToast("Telegram не готов", Toast.LENGTH_SHORT);
-      return;
-    }
-    if (listing.authorUserId != 0) {
-      tdlib.ui().openPrivateChat(this, listing.authorUserId, null);
-      return;
-    }
-    if (!StringUtils.isEmpty(listing.authorUsername)) {
-      String username = listing.authorUsername.startsWith("@")
-        ? listing.authorUsername.substring(1) : listing.authorUsername;
-      tdlib.ui().openPublicChat(this, username, null);
-      return;
-    }
-    UI.showToast("У объявления нет контакта автора", Toast.LENGTH_SHORT);
+  private static String textOf (EditText edit) {
+    return edit != null && edit.getText() != null ? edit.getText().toString().trim() : "";
   }
 }
