@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Я рядом — сервис аренды жилья -->
+  <item type="id" name="btn_yaryadom" />
+  <item type="id" name="controller_yaryadom" />
+</resources>
