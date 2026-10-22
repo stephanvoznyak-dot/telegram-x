@@ -1,16 +1,23 @@
 /*
  * Telegram X + «Я рядом»
  *
- * Базовый экран сервиса аренды жилья внутри клиента Telegram X.
+ * Экран сервиса аренды жилья внутри клиента Telegram X.
  */
 package org.thunderdog.challegram.ui;
 
 import android.content.Context;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.text.InputType;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.navigation.BackHeaderButton;
@@ -19,16 +26,47 @@ import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.UI;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import me.vkryl.android.widget.FrameLayoutFix;
 
 /**
- * Экран «Я рядом» — точка входа сервиса аренды жилья.
+ * Экран «Я рядом» — поиск и просмотр объявлений об аренде жилья.
  */
 public class YaRyadomController extends ViewController<Void> {
 
+  private static class Listing {
+    final String title;
+    final String price;
+    final String meta;
+    final String district;
+
+    Listing (String title, String price, String meta, String district) {
+      this.title = title;
+      this.price = price;
+      this.meta = meta;
+      this.district = district;
+    }
+  }
+
+  private final List<Listing> listings = new ArrayList<>();
+  private LinearLayout listContainer;
+  private EditText searchInput;
+
   public YaRyadomController (Context context, Tdlib tdlib) {
     super(context, tdlib);
+    seedDemoListings();
+  }
+
+  private void seedDemoListings () {
+    listings.add(new Listing("2-комн. квартира у метро", "45 000 ₽/мес", "45 м² · 2/9 эт.", "Центр"));
+    listings.add(new Listing("Студия с ремонтом", "28 000 ₽/мес", "28 м² · 5/12 эт.", "Север"));
+    listings.add(new Listing("3-комн. семейная", "62 000 ₽/мес", "78 м² · 3/5 эт.", "Юг"));
+    listings.add(new Listing("Комната в квартире", "18 000 ₽/мес", "16 м² · 7/9 эт.", "Восток"));
+    listings.add(new Listing("1-комн. новостройка", "38 000 ₽/мес", "36 м² · 10/16 эт.", "Запад"));
   }
 
   @Override
@@ -48,38 +86,197 @@ public class YaRyadomController extends ViewController<Void> {
 
   @Override
   protected View onCreateView (Context context) {
-    LinearLayout content = new LinearLayout(context);
-    content.setOrientation(LinearLayout.VERTICAL);
-    content.setGravity(Gravity.CENTER);
-    content.setLayoutParams(FrameLayoutFix.newParams(
+    LinearLayout root = new LinearLayout(context);
+    root.setOrientation(LinearLayout.VERTICAL);
+    root.setLayoutParams(FrameLayoutFix.newParams(
       ViewGroup.LayoutParams.MATCH_PARENT,
       ViewGroup.LayoutParams.MATCH_PARENT
     ));
-    content.setBackgroundColor(Theme.backgroundColor());
-    content.setPadding(Screen.dp(24f), Screen.dp(24f), Screen.dp(24f), Screen.dp(24f));
+    root.setBackgroundColor(Theme.backgroundColor());
+
+    // —— Поиск ——
+    LinearLayout searchBar = new LinearLayout(context);
+    searchBar.setOrientation(LinearLayout.HORIZONTAL);
+    searchBar.setGravity(Gravity.CENTER_VERTICAL);
+    int pad = Screen.dp(12f);
+    searchBar.setPadding(pad, pad, pad, pad);
+
+    searchInput = new EditText(context);
+    searchInput.setHint("Город, район, метро…");
+    searchInput.setInputType(InputType.TYPE_CLASS_TEXT);
+    searchInput.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
+    searchInput.setTextColor(Theme.getColor(ColorId.text));
+    searchInput.setHintTextColor(Theme.getColor(ColorId.textLight));
+    searchInput.setBackgroundColor(Theme.getColor(ColorId.filling));
+    searchInput.setPadding(Screen.dp(14f), Screen.dp(12f), Screen.dp(14f), Screen.dp(12f));
+    searchInput.setSingleLine(true);
+    LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    searchBar.addView(searchInput, searchLp);
+
+    TextView searchBtn = makeButton(context, "Найти", true);
+    searchBtn.setOnClickListener(v -> filterListings());
+    LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+      ViewGroup.LayoutParams.WRAP_CONTENT,
+      ViewGroup.LayoutParams.WRAP_CONTENT
+    );
+    btnLp.leftMargin = Screen.dp(8f);
+    searchBar.addView(searchBtn, btnLp);
+
+    root.addView(searchBar);
+
+    // —— Кнопки действий ——
+    LinearLayout actions = new LinearLayout(context);
+    actions.setOrientation(LinearLayout.HORIZONTAL);
+    actions.setPadding(pad, 0, pad, pad);
+
+    TextView placeBtn = makeButton(context, "+ Разместить", false);
+    placeBtn.setOnClickListener(v ->
+      UI.showToast("Размещение объявления — в следующей версии", Toast.LENGTH_SHORT)
+    );
+    actions.addView(placeBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+    TextView favBtn = makeButton(context, "Избранное", false);
+    favBtn.setOnClickListener(v ->
+      UI.showToast("Избранное — в следующей версии", Toast.LENGTH_SHORT)
+    );
+    LinearLayout.LayoutParams favLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    favLp.leftMargin = Screen.dp(8f);
+    actions.addView(favBtn, favLp);
+
+    root.addView(actions);
+
+    // —— Список объявлений ——
+    ScrollView scroll = new ScrollView(context);
+    scroll.setLayoutParams(new LinearLayout.LayoutParams(
+      ViewGroup.LayoutParams.MATCH_PARENT,
+      0,
+      1f
+    ));
+
+    listContainer = new LinearLayout(context);
+    listContainer.setOrientation(LinearLayout.VERTICAL);
+    listContainer.setPadding(pad, 0, pad, pad);
+    scroll.addView(listContainer);
+
+    root.addView(scroll);
+
+    renderListings(listings);
+
+    return root;
+  }
+
+  private TextView makeButton (Context context, String text, boolean primary) {
+    TextView btn = new TextView(context);
+    btn.setText(text);
+    btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
+    btn.setTypeface(Typeface.DEFAULT_BOLD);
+    btn.setGravity(Gravity.CENTER);
+    btn.setPadding(Screen.dp(16f), Screen.dp(12f), Screen.dp(16f), Screen.dp(12f));
+
+    GradientDrawable bg = new GradientDrawable();
+    bg.setCornerRadius(Screen.dp(10f));
+    if (primary) {
+      bg.setColor(0xFF0088CC); // Telegram blue
+      btn.setTextColor(0xFFFFFFFF);
+    } else {
+      bg.setColor(Theme.getColor(ColorId.filling));
+      btn.setTextColor(Theme.getColor(ColorId.text));
+    }
+    btn.setBackground(bg);
+    return btn;
+  }
+
+  private void filterListings () {
+    String q = searchInput.getText() != null
+      ? searchInput.getText().toString().trim().toLowerCase()
+      : "";
+
+    if (q.isEmpty()) {
+      renderListings(listings);
+      return;
+    }
+
+    List<Listing> filtered = new ArrayList<>();
+    for (Listing l : listings) {
+      if (l.title.toLowerCase().contains(q)
+        || l.district.toLowerCase().contains(q)
+        || l.meta.toLowerCase().contains(q)
+        || l.price.toLowerCase().contains(q)) {
+        filtered.add(l);
+      }
+    }
+    renderListings(filtered);
+  }
+
+  private void renderListings (List<Listing> data) {
+    listContainer.removeAllViews();
+
+    if (data.isEmpty()) {
+      TextView empty = new TextView(context);
+      empty.setText("Ничего не найдено");
+      empty.setTextColor(Theme.getColor(ColorId.textLight));
+      empty.setGravity(Gravity.CENTER);
+      empty.setPadding(0, Screen.dp(40f), 0, 0);
+      listContainer.addView(empty);
+      return;
+    }
+
+    for (Listing listing : data) {
+      listContainer.addView(createListingCard(context, listing));
+    }
+  }
+
+  private View createListingCard (Context context, Listing listing) {
+    LinearLayout card = new LinearLayout(context);
+    card.setOrientation(LinearLayout.VERTICAL);
+    card.setPadding(Screen.dp(14f), Screen.dp(14f), Screen.dp(14f), Screen.dp(14f));
+
+    GradientDrawable bg = new GradientDrawable();
+    bg.setCornerRadius(Screen.dp(12f));
+    bg.setColor(Theme.getColor(ColorId.filling));
+    card.setBackground(bg);
+
+    LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+      ViewGroup.LayoutParams.MATCH_PARENT,
+      ViewGroup.LayoutParams.WRAP_CONTENT
+    );
+    cardLp.bottomMargin = Screen.dp(10f);
+    card.setLayoutParams(cardLp);
+
+    // Заголовок + цена
+    LinearLayout row = new LinearLayout(context);
+    row.setOrientation(LinearLayout.HORIZONTAL);
+    row.setGravity(Gravity.CENTER_VERTICAL);
 
     TextView title = new TextView(context);
-    title.setText("Я рядом");
-    title.setTextSize(28f);
+    title.setText(listing.title);
+    title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
+    title.setTypeface(Typeface.DEFAULT_BOLD);
     title.setTextColor(Theme.getColor(ColorId.text));
-    title.setGravity(Gravity.CENTER);
-    content.addView(title);
+    row.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-    TextView subtitle = new TextView(context);
-    subtitle.setText("Сервис аренды жилья");
-    subtitle.setTextSize(16f);
-    subtitle.setTextColor(Theme.getColor(ColorId.textLight));
-    subtitle.setGravity(Gravity.CENTER);
-    subtitle.setPadding(0, Screen.dp(12f), 0, Screen.dp(32f));
-    content.addView(subtitle);
+    TextView price = new TextView(context);
+    price.setText(listing.price);
+    price.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
+    price.setTypeface(Typeface.DEFAULT_BOLD);
+    price.setTextColor(0xFF0088CC);
+    row.addView(price);
 
-    TextView hint = new TextView(context);
-    hint.setText("Здесь появится:\n• поиск объявлений\n• размещение жилья\n• заявки и чаты");
-    hint.setTextSize(15f);
-    hint.setTextColor(Theme.getColor(ColorId.textLight));
-    hint.setGravity(Gravity.CENTER);
-    content.addView(hint);
+    card.addView(row);
 
-    return content;
+    TextView meta = new TextView(context);
+    meta.setText(listing.meta + " · " + listing.district);
+    meta.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+    meta.setTextColor(Theme.getColor(ColorId.textLight));
+    meta.setPadding(0, Screen.dp(6f), 0, Screen.dp(10f));
+    card.addView(meta);
+
+    TextView contactBtn = makeButton(context, "Написать", true);
+    contactBtn.setOnClickListener(v ->
+      UI.showToast("Открытие чата с автором — в следующей версии", Toast.LENGTH_SHORT)
+    );
+    card.addView(contactBtn);
+
+    return card;
   }
 }
