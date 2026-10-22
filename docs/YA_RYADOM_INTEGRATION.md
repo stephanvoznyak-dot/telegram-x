@@ -1,89 +1,77 @@
 # Интеграция «Я рядом» в Telegram X
 
-Этот документ описывает план встраивания сервиса аренды жилья **«Я рядом»** в клиент на базе Telegram X.
+## Текущий статус
 
-## Цель
+- [x] Форк Telegram X: https://github.com/stephanvoznyak-dot/telegram-x
+- [x] Создан контроллер-заглушка: `app/src/main/java/org/thunderdog/challegram/ui/YaRyadomController.java`
+- [ ] Пункт «Я рядом» в боковом меню (Drawer)
+- [ ] Привязка клика к открытию контроллера
 
-Сохранить полноценный клиент Telegram и добавить внутри него:
+## Как добавить пункт в боковое меню
 
-- Поиск объявлений об аренде
-- Размещение объявлений
-- Заявки и общение с арендодателями/арендаторами
-- Профиль и избранное
+Файл: `app/src/main/java/org/thunderdog/challegram/navigation/DrawerController.java`
 
-## Рекомендуемые точки встраивания
+### 1. Добавить пункт в список items
 
-### 1. Пункт в боковом меню (Drawer) — предпочтительно
+Найдите место, где создаются пункты меню (примерно после `btn_savedMessages` или перед `btn_settings`):
 
-Добавить отдельный пункт «Я рядом» в боковое меню Telegram X.  
-При нажатии открывается экран/контроллер с функционалом сервиса.
-
-**Плюсы:** не ломает основной UX Telegram, легко найти.
-
-### 2. Отдельная вкладка в нижней навигации
-
-Если в текущей версии Telegram X есть место для дополнительной вкладки.
-
-### 3. Плавающая кнопка / быстрый доступ
-
-Менее предпочтительно для основного функционала.
-
-## Технический подход
-
-1. **Не переписывать** ядро Telegram X и TDLib.
-2. Добавить новый модуль/пакет (например, `org.thunderdog.challegram.yaryadom`).
-3. Использовать существующую систему экранов/контроллеров Telegram X.
-4. Данные объявлений хранить на своём backend (или временно в локальной БД).
-5. Для общения использовать обычные чаты Telegram (deep-link / открытие диалога).
-
-## Этапы
-
-### Этап A. Подготовка окружения
-- [x] Форк Telegram X создан: `stephanvoznyak-dot/telegram-x`
-- [ ] Получить `api_id` и `api_hash` на https://my.telegram.org
-- [ ] Настроить `local.properties`
-- [ ] Успешно собрать debug-APK
-
-### Этап B. Минимальная точка входа
-- [ ] Добавить пункт «Я рядом» в боковое меню
-- [ ] Создать пустой экран/контроллер «Я рядом»
-- [ ] Убедиться, что он открывается и закрывается корректно
-
-### Этап C. Базовый функционал
-- [ ] Список объявлений (заглушка → реальные данные)
-- [ ] Карточка объявления
-- [ ] Создание объявления
-- [ ] Переход в чат с автором объявления
-
-### Этап D. Полировка
-- [ ] Избранное, фильтры, поиск
-- [ ] Иконки, тексты, локализация
-- [ ] Сборка релизного APK
-
-## Получение API credentials
-
-1. Зайти на https://my.telegram.org
-2. Войти по номеру телефона
-3. Перейти в **API development tools**
-4. Создать приложение и скопировать `api_id` и `api_hash`
-5. Прописать их в `local.properties`:
-
-```properties
-sdk.dir=...путь к Android SDK...
-telegram.api_id=ВАШ_API_ID
-telegram.api_hash=ВАШ_API_HASH
+```java
+items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_savedMessages, R.drawable.baseline_bookmark_24, R.string.SavedMessages));
 ```
 
-## Сборка
+Добавьте сразу после него:
+
+```java
+// «Я рядом» — сервис аренды жилья
+items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_help, R.drawable.baseline_home_24, "Я рядом", false));
+```
+
+> Пока используем существующий `R.id.btn_help` только как временный id (или добавьте новый id в `ids.xml`).  
+> Иконку `baseline_home_24` замените на любую подходящую из `R.drawable`.
+
+Лучший вариант — добавить новый id:
+
+В `app/src/main/res/values/ids.xml` (или соответствующий файл):
+
+```xml
+<item name="btn_yaryadom" type="id"/>
+<item name="controller_yaryadom" type="id"/>
+```
+
+И использовать `R.id.btn_yaryadom`.
+
+### 2. Обработать клик в onClick
+
+В методе `onClick(View v)` добавьте:
+
+```java
+} else if (viewId == R.id.btn_yaryadom) {   // или временный id
+  close(0f, () -> {
+    UI.navigateTo(new YaRyadomController(context, context.currentTdlib()));
+  });
+```
+
+Не забудьте импорт:
+
+```java
+import org.thunderdog.challegram.ui.YaRyadomController;
+```
+
+### 3. Сборка
+
+После изменений:
 
 ```bash
-git clone --recursive https://github.com/stephanvoznyak-dot/telegram-x.git
-cd telegram-x
-# создать local.properties
 ./gradlew assembleLatestUniversalDebug
 ```
 
-## Репозитории
+## Следующие шаги
 
-- Форк Telegram X: https://github.com/stephanvoznyak-dot/telegram-x
-- Предыдущий прототип (отдельное приложение): https://github.com/stephanvoznyak-dot/ya-ryadom-android
+1. Добавить id-ресурсы
+2. Внести изменения в DrawerController (пункт + onClick)
+3. Собрать и проверить, что экран открывается
+4. Наполнить YaRyadomController реальным функционалом (список объявлений, поиск и т.д.)
+
+## Репозиторий
+
+https://github.com/stephanvoznyak-dot/telegram-x
