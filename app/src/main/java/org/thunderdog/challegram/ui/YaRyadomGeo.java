@@ -4,6 +4,7 @@
  * Объявление = канал (supergroup) с ChatLocation.
  * Поиск = TdApi.SearchChatsNearby.
  * Создание = TdApi.CreateNewSupergroupChat + ChatLocation.
+ * Избранное = сообщение в Saved Messages со списком chatId.
  */
 package org.thunderdog.challegram.ui;
 
@@ -16,9 +17,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 import me.vkryl.core.StringUtils;
-import me.vkryl.core.lambda.RunnableData;
+import tgx.td.ChatId;
 
 public final class YaRyadomGeo {
+
+  public interface ListCallback {
+    void onResult (List<Listing> list);
+  }
+
+  public interface ErrorCallback {
+    void onError (String message);
+  }
+
+  public interface LongCallback {
+    void onResult (long value);
+  }
+
+  public interface IdsCallback {
+    void onResult (List<Long> ids);
+  }
 
   public static final class Listing {
     public final long chatId;
@@ -26,7 +43,7 @@ public final class YaRyadomGeo {
     public final String address;
     public final double latitude;
     public final double longitude;
-    public final int distanceMeters; // -1 если неизвестно
+    public final int distanceMeters;
 
     public Listing (long chatId, String title, String address,
                     double latitude, double longitude, int distanceMeters) {
@@ -45,16 +62,14 @@ public final class YaRyadomGeo {
     }
   }
 
+  public static final String FAV_PREFIX = "YR_FAV";
+
   private YaRyadomGeo () {}
 
-  /**
-   * Поиск каналов/групп с геометкой рядом с точкой.
-   */
   public static void searchNearby (Tdlib tdlib, double lat, double lng,
-                                   RunnableData<List<Listing>> onResult,
-                                   RunnableData<String> onError) {
+                                   ListCallback onResult, ErrorCallback onError) {
     if (tdlib == null) {
-      if (onError != null) onError.runWithData("Telegram не готов");
+      if (onError != null) onError.onError("Telegram не готов");
       return;
     }
 
@@ -62,40 +77,24 @@ public final class YaRyadomGeo {
       new TdApi.SearchChatsNearby(new TdApi.Location(lat, lng, 0.0)),
       object -> tdlib.ui().post(() -> {
         if (object instanceof TdApi.Error) {
-          TdApi.Error err = (TdApi.Error) object;
-          if (onError != null) onError.runWithData(err.message);
+          if (onError != null) onError.onError(((TdApi.Error) object).message);
           return;
         }
         if (!(object instanceof TdApi.ChatsNearby)) {
-          if (onError != null) onError.runWithData("Неожиданный ответ TDLib");
+          if (onError != null) onError.onError("Неожиданный ответ TDLib");
           return;
         }
 
         TdApi.ChatsNearby nearby = (TdApi.ChatsNearby) object;
         List<Listing> list = new ArrayList<>();
-
-        // locationsNearby — supergroups с геолокацией
-        if (nearby.usersNearby != null) {
-          // usersNearby — люди рядом, не объявления; пропускаем
-        }
-        // В TDLib ChatsNearby содержит:
-        // - usersNearby: ChatNearby[]
-        // - locationsNearby: ChatNearby[]  (location-based groups)
-
-        appendNearby(tdlib, list, getLocationsNearby(nearby));
-
-        if (onResult != null) onResult.runWithData(list);
+        appendNearby(tdlib, list, readLocationsNearby(nearby));
+        if (onResult != null) onResult.onResult(list);
       })
     );
   }
 
-  /**
-   * Совместимость с разными версиями TDLib: locationsNearby может называться иначе.
-   * Берём все ChatNearby из ответа, у которых у чата есть location.
-   */
-  private static TdApi.ChatNearby[] getLocationsNearby (TdApi.ChatsNearby nearby) {
+  private static TdApi.ChatNearby[] readLocationsNearby (TdApi.ChatsNearby nearby) {
     try {
-      // Стандартное поле TDLib
       java.lang.reflect.Field f = nearby.getClass().getField("locationsNearby");
       Object val = f.get(nearby);
       if (val instanceof TdApi.ChatNearby[]) {
@@ -103,7 +102,6 @@ public final class YaRyadomGeo {
       }
     } catch (Throwable ignored) {
     }
-    // Fallback: usersNearby иногда содержит смешанные данные — не используем
     return new TdApi.ChatNearby[0];
   }
 
@@ -112,7 +110,7 @@ public final class YaRyadomGeo {
     for (TdApi.ChatNearby n : arr) {
       if (n == null || n.chatId == 0) continue;
       String title = tdlib.chatTitle(n.chatId);
-      if (StringUtils.isEmpty(title)) title = "Канал #";
+      if (StringUtils.isEmpty(title)) title = "Канал";
 
       double lat = 0, lng = 0;
       String address = "";
@@ -127,30 +125,26 @@ public final class YaRyadomGeo {
     }
   }
 
-  /**
-   * Создать канал-объявление с геометкой.
-   * title — название объявления, address — текстовый адрес,
-   * description — описание (цена, комнаты и т.д.).
-   */
   public static void createListingChannel (Tdlib tdlib,
-                                          String title,
-                                          String description,
-                                          double lat,
-                                          double lng,
-                                          String address,
-                                          RunnableData<Long> onChatId,
-                                          RunnableData<String> onError) {
+                                           String title,
+                                           String description,
+                                           double lat,
+                                           double lng,
+                                           String address,
+                                           LongCallback onChatId,
+                                           ErrorCallback onError) {
     if (tdlib == null) {
-      if (onError != null) onError.runWithData("Telegram не готов");
+      if (onError != null) onError.onError("Telegram не готов");
       return;
     }
 
     TdApi.Location location = new TdApi.Location(lat, lng, 0.0);
-    TdApi.ChatLocation chatLocation = new TdApi.ChatLocation(location,
-      StringUtils.isEmpty(address) ? "Адрес не указан" : address);
+    TdApi.ChatLocation chatLocation = new TdApi.ChatLocation(
+      location,
+      StringUtils.isEmpty(address) ? "Адрес не указан" : address
+    );
 
-    // CreateNewSupergroupChat(title, isForum, description, location, messageAutoDeleteTime, forImport)
-    TdApi.CreateNewSupergroupChat req;
+    final TdApi.CreateNewSupergroupChat req;
     try {
       req = new TdApi.CreateNewSupergroupChat(
         title,
@@ -161,74 +155,55 @@ public final class YaRyadomGeo {
         false
       );
     } catch (Throwable t) {
-      // Старые биндинги без location — пробуем без гео
-      try {
-        req = new TdApi.CreateNewSupergroupChat(
-          title,
-          false,
-          description != null ? description : "",
-          null,
-          0,
-          false
-        );
-      } catch (Throwable t2) {
-        if (onError != null) onError.runWithData("CreateNewSupergroupChat недоступен: " + t2.getMessage());
-        return;
-      }
+      if (onError != null) onError.onError("CreateNewSupergroupChat: " + t.getMessage());
+      return;
     }
 
     tdlib.client().send(req, object -> tdlib.ui().post(() -> {
       if (object instanceof TdApi.Error) {
-        if (onError != null) onError.runWithData(((TdApi.Error) object).message);
+        if (onError != null) onError.onError(((TdApi.Error) object).message);
         return;
       }
       if (object instanceof TdApi.Chat) {
-        long chatId = ((TdApi.Chat) object).id;
-        if (onChatId != null) onChatId.runWithData(chatId);
+        if (onChatId != null) onChatId.onResult(((TdApi.Chat) object).id);
       } else if (onError != null) {
-        onError.runWithData("Не удалось создать канал");
+        onError.onError("Не удалось создать канал");
       }
     }));
   }
 
-  /**
-   * Избранное: храним chatId списком в «Избранном»-сообщении в Saved Messages.
-   * Формат текста: YR_FAV\n123\n456\n...
-   */
-  public static final String FAV_PREFIX = "YR_FAV";
-
-  public static void loadFavoriteChatIds (Tdlib tdlib,
-                                          RunnableData<List<Long>> onResult) {
+  public static void loadFavoriteChatIds (Tdlib tdlib, IdsCallback onResult) {
     if (tdlib == null) {
-      if (onResult != null) onResult.runWithData(new ArrayList<>());
+      if (onResult != null) onResult.onResult(new ArrayList<>());
       return;
     }
-    long savedChatId = org.thunderdog.challegram.telegram.ChatId.fromUserId(tdlib.myUserId());
+    long savedChatId = ChatId.fromUserId(tdlib.myUserId());
     if (savedChatId == 0) {
-      if (onResult != null) onResult.runWithData(new ArrayList<>());
+      if (onResult != null) onResult.onResult(new ArrayList<>());
       return;
     }
 
-    tdlib.client().send(new TdApi.GetChatHistory(savedChatId, 0, 0, 50, false), object -> tdlib.ui().post(() -> {
-      List<Long> ids = new ArrayList<>();
-      if (object instanceof TdApi.Messages) {
-        for (TdApi.Message msg : ((TdApi.Messages) object).messages) {
-          if (msg == null || !(msg.content instanceof TdApi.MessageText)) continue;
-          String text = ((TdApi.MessageText) msg.content).text.text;
-          if (text != null && text.startsWith(FAV_PREFIX)) {
-            String[] lines = text.split("\n");
-            for (int i = 1; i < lines.length; i++) {
-              try {
-                long id = Long.parseLong(lines[i].trim());
-                if (id != 0 && !ids.contains(id)) ids.add(id);
-              } catch (NumberFormatException ignored) {}
+    tdlib.client().send(new TdApi.GetChatHistory(savedChatId, 0, 0, 50, false),
+      object -> tdlib.ui().post(() -> {
+        List<Long> ids = new ArrayList<>();
+        if (object instanceof TdApi.Messages) {
+          for (TdApi.Message msg : ((TdApi.Messages) object).messages) {
+            if (msg == null || !(msg.content instanceof TdApi.MessageText)) continue;
+            String text = ((TdApi.MessageText) msg.content).text.text;
+            if (text != null && text.startsWith(FAV_PREFIX)) {
+              String[] lines = text.split("\n");
+              for (int i = 1; i < lines.length; i++) {
+                try {
+                  long id = Long.parseLong(lines[i].trim());
+                  if (id != 0 && !ids.contains(id)) ids.add(id);
+                } catch (NumberFormatException ignored) {}
+              }
+              break;
             }
-            break; // берём первое (самое новое) сообщение-список
           }
         }
-      }
-      if (onResult != null) onResult.runWithData(ids);
-    }));
+        if (onResult != null) onResult.onResult(ids);
+      }));
   }
 
   public static void saveFavoriteChatIds (Tdlib tdlib, List<Long> chatIds,
@@ -237,7 +212,7 @@ public final class YaRyadomGeo {
       if (onDone != null) onDone.run();
       return;
     }
-    long savedChatId = org.thunderdog.challegram.telegram.ChatId.fromUserId(tdlib.myUserId());
+    long savedChatId = ChatId.fromUserId(tdlib.myUserId());
     if (savedChatId == 0) {
       if (onDone != null) onDone.run();
       return;
