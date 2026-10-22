@@ -1,77 +1,73 @@
-# Патч: пункт «Я рядом» в боковом меню Telegram X
+# Интеграция «Я рядом» в Telegram X — инструкция
 
-## Шаг 1. Добавить id-ресурсы
+## Быстрый способ (рекомендуется)
 
-Файл: `app/src/main/res/values/ids.xml`
+Из корня репозитория `telegram-x`:
 
-Перед закрывающим `</resources>` добавьте:
-
-```xml
-  <!-- Я рядом -->
-  <item type="id" name="btn_yaryadom" />
-  <item type="id" name="controller_yaryadom" />
+```bash
+chmod +x docs/RESTORE_AND_PATCH.sh
+./docs/RESTORE_AND_PATCH.sh
 ```
 
-## Шаг 2. Изменить DrawerController.java
+Скрипт:
+1. Восстановит `DrawerController.java` из официального Telegram X
+2. Добавит import `YaRyadomController`
+3. Добавит пункт «Я рядом» в боковое меню
+4. Добавит обработку нажатия
 
-Файл: `app/src/main/java/org/thunderdog/challegram/navigation/DrawerController.java`
-
-### 2.1. Импорт
-
-В начало файла (к другим import) добавьте:
-
-```java
-import org.thunderdog.challegram.ui.YaRyadomController;
-```
-
-### 2.2. Пункт меню
-
-Найдите строки:
-
-```java
-    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_savedMessages, R.drawable.baseline_bookmark_24, R.string.SavedMessages));
-    this.settingsClickBait = getSettingsClickBait();
-    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_settings, R.drawable.baseline_settings_24, R.string.Settings));
-```
-
-Замените на:
-
-```java
-    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_savedMessages, R.drawable.baseline_bookmark_24, R.string.SavedMessages));
-    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_yaryadom, R.drawable.baseline_home_24, "Я рядом", false));
-    this.settingsClickBait = getSettingsClickBait();
-    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_settings, R.drawable.baseline_settings_24, R.string.Settings));
-```
-
-### 2.3. Обработка клика
-
-В методе `onClick(View v)` найдите блок с `btn_savedMessages` и добавьте рядом:
-
-```java
-    } else if (viewId == R.id.btn_yaryadom) {
-      close(0f, () -> {
-        UI.navigateTo(new YaRyadomController(context, context.currentTdlib()));
-      });
-```
-
-## Шаг 3. Обновить getId() в контроллере (опционально)
-
-В `YaRyadomController.java` замените:
-
-```java
-return R.id.controller_settings;
-```
-
-на:
-
-```java
-return R.id.controller_yaryadom;
-```
-
-## Шаг 4. Сборка
+Затем:
 
 ```bash
 ./gradlew assembleLatestUniversalDebug
 ```
 
-После установки APK в боковом меню должен появиться пункт **«Я рядом»**. При нажатии откроется экран сервиса.
+---
+
+## Что уже есть в репозитории
+
+| Файл | Назначение |
+|------|------------|
+| `app/src/main/java/.../ui/YaRyadomController.java` | Экран «Я рядом» |
+| `app/src/main/res/values/ids_yaryadom.xml` | ID: `btn_yaryadom`, `controller_yaryadom` |
+| `docs/RESTORE_AND_PATCH.sh` | Скрипт восстановления + патча |
+
+---
+
+## Ручной способ (если скрипт не сработал)
+
+### 1. Восстановить DrawerController
+
+```bash
+git fetch https://github.com/TGX-Android/Telegram-X.git main
+git checkout FETCH_HEAD -- app/src/main/java/org/thunderdog/challegram/navigation/DrawerController.java
+```
+
+### 2. Import
+
+```java
+import org.thunderdog.challegram.ui.YaRyadomController;
+```
+
+### 3. Пункт меню (после SavedMessages)
+
+```java
+items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_yaryadom, R.drawable.baseline_home_24, "Я рядом", false));
+```
+
+### 4. Клик в onClick
+
+```java
+} else if (viewId == R.id.btn_yaryadom) {
+  close(0f, () -> {
+    UI.navigateTo(new YaRyadomController(context, context.currentTdlib()));
+  });
+```
+
+---
+
+## После успешной сборки
+
+В боковом меню появится пункт **«Я рядом»**.  
+При нажатии откроется экран сервиса.
+
+Дальше можно наполнять `YaRyadomController` функционалом (поиск, объявления, заявки).
