@@ -1,77 +1,37 @@
 # Интеграция «Я рядом» в Telegram X
 
-## Текущий статус
+## Статус
 
-- [x] Форк Telegram X: https://github.com/stephanvoznyak-dot/telegram-x
-- [x] Создан контроллер-заглушка: `app/src/main/java/org/thunderdog/challegram/ui/YaRyadomController.java`
-- [ ] Пункт «Я рядом» в боковом меню (Drawer)
-- [ ] Привязка клика к открытию контроллера
+| Этап | Статус |
+|------|--------|
+| Форк Telegram X | Готов |
+| Контроллер `YaRyadomController` | **Наполнен** |
+| ID ресурсов | Готовы (`ids_yaryadom.xml`) |
+| Пункт в боковом меню | Нужно применить `docs/RESTORE_AND_PATCH.sh` |
 
-## Как добавить пункт в боковое меню
+## Что есть на экране «Я рядом»
 
-Файл: `app/src/main/java/org/thunderdog/challegram/navigation/DrawerController.java`
+- Поле поиска (город, район, метро)
+- Кнопка «Найти» с фильтрацией демо-объявлений
+- Кнопки «Разместить» и «Избранное» (заглушки)
+- Список карточек объявлений:
+  - заголовок, цена, площадь, этаж, район
+  - кнопка «Написать»
+- 5 демо-объявлений для проверки UI
 
-### 1. Добавить пункт в список items
-
-Найдите место, где создаются пункты меню (примерно после `btn_savedMessages` или перед `btn_settings`):
-
-```java
-items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_savedMessages, R.drawable.baseline_bookmark_24, R.string.SavedMessages));
-```
-
-Добавьте сразу после него:
-
-```java
-// «Я рядом» — сервис аренды жилья
-items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_help, R.drawable.baseline_home_24, "Я рядом", false));
-```
-
-> Пока используем существующий `R.id.btn_help` только как временный id (или добавьте новый id в `ids.xml`).  
-> Иконку `baseline_home_24` замените на любую подходящую из `R.drawable`.
-
-Лучший вариант — добавить новый id:
-
-В `app/src/main/res/values/ids.xml` (или соответствующий файл):
-
-```xml
-<item name="btn_yaryadom" type="id"/>
-<item name="controller_yaryadom" type="id"/>
-```
-
-И использовать `R.id.btn_yaryadom`.
-
-### 2. Обработать клик в onClick
-
-В методе `onClick(View v)` добавьте:
-
-```java
-} else if (viewId == R.id.btn_yaryadom) {   // или временный id
-  close(0f, () -> {
-    UI.navigateTo(new YaRyadomController(context, context.currentTdlib()));
-  });
-```
-
-Не забудьте импорт:
-
-```java
-import org.thunderdog.challegram.ui.YaRyadomController;
-```
-
-### 3. Сборка
-
-После изменений:
+## Как подключить пункт меню
 
 ```bash
+chmod +x docs/RESTORE_AND_PATCH.sh
+./docs/RESTORE_AND_PATCH.sh
 ./gradlew assembleLatestUniversalDebug
 ```
 
+Подробности: `docs/PATCH_YARYADOM_DRAWER.md`
+
 ## Следующие шаги
 
-1. Добавить id-ресурсы
-2. Внести изменения в DrawerController (пункт + onClick)
-3. Собрать и проверить, что экран открывается
-4. Наполнить YaRyadomController реальным функционалом (список объявлений, поиск и т.д.)
-
-## Репозиторий
-
-https://github.com/stephanvoznyak-dot/telegram-x
+1. Подключить реальный backend с объявлениями
+2. Открытие чата с автором через TDLib
+3. Форма размещения объявления
+4. Избранное и заявки
