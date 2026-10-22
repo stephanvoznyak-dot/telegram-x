@@ -1,7 +1,6 @@
 /*
  * Telegram X + «Я рядом»
- *
- * Экран сервиса аренды жилья. Форма размещения + чат с автором через TDLib.
+ * Поиск, размещение, избранное, чат с автором через TDLib.
  */
 package org.thunderdog.challegram.ui;
 
@@ -33,16 +32,17 @@ import org.thunderdog.challegram.tool.UI;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import me.vkryl.android.widget.FrameLayoutFix;
 import me.vkryl.core.StringUtils;
 
-/**
- * Экран «Я рядом» — поиск, размещение объявлений и связь с автором через TDLib.
- */
 public class YaRyadomController extends ViewController<Void> {
 
+  private static final AtomicInteger ID_SEQ = new AtomicInteger(1);
+
   private static class Listing {
+    final String id;
     final String title;
     final String price;
     final String meta;
@@ -50,14 +50,21 @@ public class YaRyadomController extends ViewController<Void> {
     @Nullable final String authorUsername;
     final long authorUserId;
 
-    Listing (String title, String price, String meta, String district,
+    Listing (String id, String title, String price, String meta, String district,
              @Nullable String authorUsername, long authorUserId) {
+      this.id = id;
       this.title = title;
       this.price = price;
       this.meta = meta;
       this.district = district;
       this.authorUsername = authorUsername;
       this.authorUserId = authorUserId;
+    }
+
+    static Listing create (String title, String price, String meta, String district,
+                           @Nullable String authorUsername, long authorUserId) {
+      return new Listing("yr_" + ID_SEQ.getAndIncrement(), title, price, meta, district,
+        authorUsername, authorUserId);
     }
   }
 
@@ -71,21 +78,11 @@ public class YaRyadomController extends ViewController<Void> {
   }
 
   private void seedDemoListings () {
-    listings.add(new Listing(
-      "2-комн. квартира у метро", "45 000 ₽/мес", "45 м² · 2/9 эт.", "Центр",
-      "telegram", 0));
-    listings.add(new Listing(
-      "Студия с ремонтом", "28 000 ₽/мес", "28 м² · 5/12 эт.", "Север",
-      "durov", 0));
-    listings.add(new Listing(
-      "3-комн. семейная", "62 000 ₽/мес", "78 м² · 3/5 эт.", "Юг",
-      "telegram", 0));
-    listings.add(new Listing(
-      "Комната в квартире", "18 000 ₽/мес", "16 м² · 7/9 эт.", "Восток",
-      null, 0));
-    listings.add(new Listing(
-      "1-комн. новостройка", "38 000 ₽/мес", "36 м² · 10/16 эт.", "Запад",
-      "telegram", 0));
+    listings.add(Listing.create("2-комн. квартира у метро", "45 000 ₽/мес", "45 м² · 2/9 эт.", "Центр", "telegram", 0));
+    listings.add(Listing.create("Студия с ремонтом", "28 000 ₽/мес", "28 м² · 5/12 эт.", "Север", "durov", 0));
+    listings.add(Listing.create("3-комн. семейная", "62 000 ₽/мес", "78 м² · 3/5 эт.", "Юг", "telegram", 0));
+    listings.add(Listing.create("Комната в квартире", "18 000 ₽/мес", "16 м² · 7/9 эт.", "Восток", null, 0));
+    listings.add(Listing.create("1-комн. новостройка", "38 000 ₽/мес", "36 м² · 10/16 эт.", "Запад", "telegram", 0));
   }
 
   @Override
@@ -147,9 +144,8 @@ public class YaRyadomController extends ViewController<Void> {
     placeBtn.setOnClickListener(v -> openCreateForm());
     actions.addView(placeBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-    TextView favBtn = makeButton(context, "Избранное", false);
-    favBtn.setOnClickListener(v ->
-      UI.showToast("Избранное — в следующей версии", Toast.LENGTH_SHORT));
+    TextView favBtn = makeButton(context, favoritesButtonLabel(), false);
+    favBtn.setOnClickListener(v -> navigateTo(new YaRyadomFavoritesController(context, tdlib)));
     LinearLayout.LayoutParams favLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
     favLp.leftMargin = Screen.dp(8f);
     actions.addView(favBtn, favLp);
@@ -167,6 +163,20 @@ public class YaRyadomController extends ViewController<Void> {
 
     renderListings(listings);
     return root;
+  }
+
+  @Override
+  public void onFocus () {
+    super.onFocus();
+    // обновить список (звёздочки) после возврата из избранного
+    if (listContainer != null) {
+      filterListings();
+    }
+  }
+
+  private String favoritesButtonLabel () {
+    int n = YaRyadomFavorites.count();
+    return n > 0 ? ("Избранное (" + n + ")") : "Избранное";
   }
 
   private TextView makeButton (Context context, String text, boolean primary) {
@@ -191,7 +201,7 @@ public class YaRyadomController extends ViewController<Void> {
   }
 
   private void filterListings () {
-    String q = searchInput.getText() != null
+    String q = searchInput != null && searchInput.getText() != null
       ? searchInput.getText().toString().trim().toLowerCase() : "";
     if (q.isEmpty()) {
       renderListings(listings);
@@ -210,6 +220,7 @@ public class YaRyadomController extends ViewController<Void> {
   }
 
   private void renderListings (List<Listing> data) {
+    if (listContainer == null) return;
     listContainer.removeAllViews();
     if (data.isEmpty()) {
       TextView empty = new TextView(context);
@@ -266,10 +277,29 @@ public class YaRyadomController extends ViewController<Void> {
     meta.setPadding(0, Screen.dp(6f), 0, Screen.dp(10f));
     card.addView(meta);
 
+    LinearLayout buttons = new LinearLayout(context);
+    buttons.setOrientation(LinearLayout.HORIZONTAL);
+
+    boolean fav = YaRyadomFavorites.isFavorite(listing.id);
+    TextView starBtn = makeButton(context, fav ? "★ В избранном" : "☆ В избранное", false);
+    starBtn.setOnClickListener(v -> {
+      YaRyadomFavorites.toggle(new YaRyadomFavorites.Item(
+        listing.id, listing.title, listing.price, listing.meta, listing.district,
+        listing.authorUsername, listing.authorUserId
+      ));
+      boolean now = YaRyadomFavorites.isFavorite(listing.id);
+      UI.showToast(now ? "Добавлено в избранное" : "Удалено из избранного", Toast.LENGTH_SHORT);
+      filterListings();
+    });
+    buttons.addView(starBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
     TextView contactBtn = makeButton(context, "Написать", true);
     contactBtn.setOnClickListener(v -> openChatWithAuthor(listing));
-    card.addView(contactBtn);
+    LinearLayout.LayoutParams contactLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    contactLp.leftMargin = Screen.dp(8f);
+    buttons.addView(contactBtn, contactLp);
 
+    card.addView(buttons);
     return card;
   }
 
@@ -295,7 +325,7 @@ public class YaRyadomController extends ViewController<Void> {
       } catch (Throwable ignored) {
       }
 
-      Listing created = new Listing(title, priceVal, meta, districtVal, myUsername, myUserId);
+      Listing created = Listing.create(title, priceVal, meta, districtVal, myUsername, myUserId);
       listings.add(0, created);
       renderListings(listings);
       UI.showToast("Объявление опубликовано", Toast.LENGTH_SHORT);
@@ -314,20 +344,16 @@ public class YaRyadomController extends ViewController<Void> {
       UI.showToast("Telegram не готов", Toast.LENGTH_SHORT);
       return;
     }
-
     if (listing.authorUserId != 0) {
       tdlib.ui().openPrivateChat(this, listing.authorUserId, null);
       return;
     }
-
     if (!StringUtils.isEmpty(listing.authorUsername)) {
       String username = listing.authorUsername.startsWith("@")
-        ? listing.authorUsername.substring(1)
-        : listing.authorUsername;
+        ? listing.authorUsername.substring(1) : listing.authorUsername;
       tdlib.ui().openPublicChat(this, username, null);
       return;
     }
-
     UI.showToast("У объявления нет контакта автора", Toast.LENGTH_SHORT);
   }
 }
