@@ -1,8 +1,7 @@
 /*
- * This file is a part of Telegram X + «Я рядом»
+ * Telegram X + «Я рядом»
  *
- * Простой контроллер-заглушка для раздела «Я рядом».
- * В дальнейшем здесь будет список объявлений, поиск и размещение жилья.
+ * Базовый экран сервиса аренды жилья внутри клиента Telegram X.
  */
 package org.thunderdog.challegram.ui;
 
@@ -10,6 +9,7 @@ import android.content.Context;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import org.thunderdog.challegram.R;
@@ -23,7 +23,7 @@ import org.thunderdog.challegram.tool.Screen;
 import me.vkryl.android.widget.FrameLayoutFix;
 
 /**
- * Экран «Я рядом» — точка входа сервиса аренды жилья внутри Telegram X.
+ * Экран «Я рядом» — точка входа сервиса аренды жилья.
  */
 public class YaRyadomController extends ViewController<Void> {
 
@@ -33,9 +33,8 @@ public class YaRyadomController extends ViewController<Void> {
 
   @Override
   public int getId () {
-    // Используем существующий id-ресурс или временное значение.
-    // После добавления id в ids.xml можно заменить на R.id.controller_yaryadom
-    return R.id.controller_settings; // временно, чтобы не требовать новый id
+    // После добавления в ids.xml замените на R.id.controller_yaryadom
+    return R.id.controller_settings;
   }
 
   @Override
@@ -50,40 +49,37 @@ public class YaRyadomController extends ViewController<Void> {
 
   @Override
   protected View onCreateView (Context context) {
-    FrameLayoutFix content = new FrameLayoutFix(context);
+    LinearLayout content = new LinearLayout(context);
+    content.setOrientation(LinearLayout.VERTICAL);
+    content.setGravity(Gravity.CENTER);
     content.setLayoutParams(FrameLayoutFix.newParams(
       ViewGroup.LayoutParams.MATCH_PARENT,
       ViewGroup.LayoutParams.MATCH_PARENT
     ));
     content.setBackgroundColor(Theme.backgroundColor());
+    content.setPadding(Screen.dp(24f), Screen.dp(24f), Screen.dp(24f), Screen.dp(24f));
 
     TextView title = new TextView(context);
     title.setText("Я рядом");
-    title.setTextSize(24f);
+    title.setTextSize(28f);
     title.setTextColor(Theme.getColor(ColorId.text));
     title.setGravity(Gravity.CENTER);
+    content.addView(title);
 
     TextView subtitle = new TextView(context);
-    subtitle.setText("Сервис аренды жилья\n(раздел в разработке)");
+    subtitle.setText("Сервис аренды жилья");
     subtitle.setTextSize(16f);
     subtitle.setTextColor(Theme.getColor(ColorId.textLight));
     subtitle.setGravity(Gravity.CENTER);
-    subtitle.setPadding(0, Screen.dp(40f), 0, 0);
+    subtitle.setPadding(0, Screen.dp(12f), 0, Screen.dp(32f));
+    content.addView(subtitle);
 
-    FrameLayoutFix.LayoutParams lp = FrameLayoutFix.newParams(
-      ViewGroup.LayoutParams.MATCH_PARENT,
-      ViewGroup.LayoutParams.WRAP_CONTENT,
-      Gravity.CENTER
-    );
-    content.addView(title, lp);
-
-    FrameLayoutFix.LayoutParams lp2 = FrameLayoutFix.newParams(
-      ViewGroup.LayoutParams.MATCH_PARENT,
-      ViewGroup.LayoutParams.WRAP_CONTENT,
-      Gravity.CENTER
-    );
-    lp2.topMargin = Screen.dp(40f);
-    content.addView(subtitle, lp2);
+    TextView hint = new TextView(context);
+    hint.setText("Здесь появится:\n• поиск объявлений\n• размещение жилья\n• заявки и чаты");
+    hint.setTextSize(15f);
+    hint.setTextColor(Theme.getColor(ColorId.textLight));
+    hint.setGravity(Gravity.CENTER);
+    content.addView(hint);
 
     return content;
   }
