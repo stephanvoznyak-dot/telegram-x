@@ -1,3 +1,12 @@
+# Telegram X + «Я рядом»
+
+> **Этот репозиторий** — форк [официального Telegram X](https://github.com/TGX-Android/Telegram-X),  
+> который используется как **отправная точка** для клиента сервиса аренды жилья **«Я рядом»**.
+
+Цель: сохранить полноценный клиент Telegram и встроить в него функции поиска и размещения жилья.
+
+---
+
 # [Telegram X](https://play.google.com/store/apps/details?id=org.thunderdog.challegram) — a slick experimental Telegram client based on [TDLib](https://core.telegram.org/tdlib).
 
 ![Telegram X](/images/feature.png)
@@ -51,7 +60,7 @@ This is the complete source code and the build instructions for the official alt
 
 ### Building
 
-1. `$ git clone --recursive https://github.com/TGX-Android/Telegram-X tgx`
+1. `$ git clone --recursive https://github.com/stephanvoznyak-dot/telegram-x tgx`
 2. In case you forgot the `--recursive` flag, `cd` into `tgx` directory and run: `$ git submodule update --init --recursive`
 3. Open project via **[Android Studio](https://developer.android.com/studio/)** or build manually from the command line: `./gradlew assembleLatestUniversalDebug`
 4. If build fails, follow the instructions provided in the error message.
