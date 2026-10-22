@@ -1,7 +1,7 @@
 /*
  * Telegram X + «Я рядом»
  *
- * Экран сервиса аренды жилья. Кнопка «Написать» открывает чат через TDLib.
+ * Экран сервиса аренды жилья. Форма размещения + чат с автором через TDLib.
  */
 package org.thunderdog.challegram.ui;
 
@@ -21,6 +21,7 @@ import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 
+import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.navigation.BackHeaderButton;
 import org.thunderdog.challegram.navigation.ViewController;
@@ -37,20 +38,17 @@ import me.vkryl.android.widget.FrameLayoutFix;
 import me.vkryl.core.StringUtils;
 
 /**
- * Экран «Я рядом» — поиск объявлений и связь с автором через TDLib.
+ * Экран «Я рядом» — поиск, размещение объявлений и связь с автором через TDLib.
  */
 public class YaRyadomController extends ViewController<Void> {
 
-  /**
-   * Объявление. authorUsername или authorUserId — для открытия чата.
-   */
   private static class Listing {
     final String title;
     final String price;
     final String meta;
     final String district;
-    @Nullable final String authorUsername; // без @
-    final long authorUserId;              // 0 = не задан
+    @Nullable final String authorUsername;
+    final long authorUserId;
 
     Listing (String title, String price, String meta, String district,
              @Nullable String authorUsername, long authorUserId) {
@@ -73,8 +71,6 @@ public class YaRyadomController extends ViewController<Void> {
   }
 
   private void seedDemoListings () {
-    // Демо: username автора — для проверки openPublicChat через TDLib.
-    // В продакшене username/userId приходят с backend.
     listings.add(new Listing(
       "2-комн. квартира у метро", "45 000 ₽/мес", "45 м² · 2/9 эт.", "Центр",
       "telegram", 0));
@@ -86,7 +82,7 @@ public class YaRyadomController extends ViewController<Void> {
       "telegram", 0));
     listings.add(new Listing(
       "Комната в квартире", "18 000 ₽/мес", "16 м² · 7/9 эт.", "Восток",
-      null, 0)); // без автора — покажем ошибку
+      null, 0));
     listings.add(new Listing(
       "1-комн. новостройка", "38 000 ₽/мес", "36 м² · 10/16 эт.", "Запад",
       "telegram", 0));
@@ -119,7 +115,6 @@ public class YaRyadomController extends ViewController<Void> {
 
     int pad = Screen.dp(12f);
 
-    // —— Поиск ——
     LinearLayout searchBar = new LinearLayout(context);
     searchBar.setOrientation(LinearLayout.HORIZONTAL);
     searchBar.setGravity(Gravity.CENTER_VERTICAL);
@@ -144,14 +139,12 @@ public class YaRyadomController extends ViewController<Void> {
     searchBar.addView(searchBtn, btnLp);
     root.addView(searchBar);
 
-    // —— Действия ——
     LinearLayout actions = new LinearLayout(context);
     actions.setOrientation(LinearLayout.HORIZONTAL);
     actions.setPadding(pad, 0, pad, pad);
 
     TextView placeBtn = makeButton(context, "+ Разместить", false);
-    placeBtn.setOnClickListener(v ->
-      UI.showToast("Размещение объявления — в следующей версии", Toast.LENGTH_SHORT));
+    placeBtn.setOnClickListener(v -> openCreateForm());
     actions.addView(placeBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
     TextView favBtn = makeButton(context, "Избранное", false);
@@ -162,7 +155,6 @@ public class YaRyadomController extends ViewController<Void> {
     actions.addView(favBtn, favLp);
     root.addView(actions);
 
-    // —— Список ——
     ScrollView scroll = new ScrollView(context);
     scroll.setLayoutParams(new LinearLayout.LayoutParams(
       ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -281,26 +273,53 @@ public class YaRyadomController extends ViewController<Void> {
     return card;
   }
 
-  /**
-   * Открыть чат с автором объявления через TDLib.
-   *
-   * Приоритет:
-   * 1. authorUserId → openPrivateChat
-   * 2. authorUsername → openPublicChat (SearchPublicChat)
-   */
+  private void openCreateForm () {
+    YaRyadomCreateController form = new YaRyadomCreateController(context, tdlib);
+    form.setListener((title, price, area, floor, district, description) -> {
+      String meta = buildMeta(area, floor);
+      String districtVal = StringUtils.isEmpty(district) ? "—" : district;
+      String priceVal = price.contains("₽") ? price : (price + " ₽/мес");
+
+      String myUsername = null;
+      long myUserId = 0;
+      try {
+        myUserId = tdlib.myUserId();
+        TdApi.User me = tdlib.myUser();
+        if (me != null && me.usernames != null) {
+          if (!StringUtils.isEmpty(me.usernames.editableUsername)) {
+            myUsername = me.usernames.editableUsername;
+          } else if (me.usernames.activeUsernames != null && me.usernames.activeUsernames.length > 0) {
+            myUsername = me.usernames.activeUsernames[0];
+          }
+        }
+      } catch (Throwable ignored) {
+      }
+
+      Listing created = new Listing(title, priceVal, meta, districtVal, myUsername, myUserId);
+      listings.add(0, created);
+      renderListings(listings);
+      UI.showToast("Объявление опубликовано", Toast.LENGTH_SHORT);
+    });
+    navigateTo(form);
+  }
+
+  private static String buildMeta (String area, String floor) {
+    String a = StringUtils.isEmpty(area) ? "—" : (area + " м²");
+    String f = StringUtils.isEmpty(floor) ? "—" : (floor + " эт.");
+    return a + " · " + f;
+  }
+
   private void openChatWithAuthor (Listing listing) {
     if (tdlib == null) {
       UI.showToast("Telegram не готов", Toast.LENGTH_SHORT);
       return;
     }
 
-    // 1. По user id
     if (listing.authorUserId != 0) {
       tdlib.ui().openPrivateChat(this, listing.authorUserId, null);
       return;
     }
 
-    // 2. По username
     if (!StringUtils.isEmpty(listing.authorUsername)) {
       String username = listing.authorUsername.startsWith("@")
         ? listing.authorUsername.substring(1)
