@@ -1,6 +1,6 @@
 /*
  * Telegram X + «Я рядом»
- * Форма: создаёт Telegram-канал с геометкой (ChatLocation).
+ * Форма создания канала-объявления (YR1 + ChatLocation).
  */
 package org.thunderdog.challegram.ui;
 
@@ -38,13 +38,8 @@ public class YaRyadomCreateController extends ViewController<Void> {
   }
 
   private OnChannelCreatedListener listener;
-
-  private EditText titleInput;
-  private EditText priceInput;
-  private EditText addressInput;
-  private EditText latInput;
-  private EditText lngInput;
-  private EditText descriptionInput;
+  private EditText titleInput, priceInput, roomsInput, areaInput;
+  private EditText addressInput, latInput, lngInput, descriptionInput;
   private TextView submitBtn;
   private boolean submitting;
 
@@ -57,28 +52,24 @@ public class YaRyadomCreateController extends ViewController<Void> {
     return this;
   }
 
-  @Override
-  public int getId () {
-    return R.id.controller_yaryadom;
+  public YaRyadomCreateController prefillCoords (double lat, double lng) {
+    // applied after view create if inputs exist
+    this.prefillLat = lat;
+    this.prefillLng = lng;
+    return this;
   }
 
-  @Override
-  protected int getBackButton () {
-    return BackHeaderButton.TYPE_BACK;
-  }
+  private double prefillLat = Double.NaN, prefillLng = Double.NaN;
 
-  @Override
-  public CharSequence getName () {
-    return "Разместить объявление";
-  }
+  @Override public int getId () { return R.id.controller_yaryadom; }
+  @Override protected int getBackButton () { return BackHeaderButton.TYPE_BACK; }
+  @Override public CharSequence getName () { return "Разместить объявление"; }
 
   @Override
   protected View onCreateView (Context context) {
     ScrollView scroll = new ScrollView(context);
     scroll.setLayoutParams(FrameLayoutFix.newParams(
-      ViewGroup.LayoutParams.MATCH_PARENT,
-      ViewGroup.LayoutParams.MATCH_PARENT
-    ));
+      ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     scroll.setBackgroundColor(Theme.backgroundColor());
     scroll.setFillViewport(true);
 
@@ -87,16 +78,27 @@ public class YaRyadomCreateController extends ViewController<Void> {
     int pad = Screen.dp(16f);
     root.setPadding(pad, pad, pad, pad);
 
-    root.addView(sectionLabel(context, "Объявление станет каналом Telegram с геометкой"));
+    root.addView(hint(context,
+      "Создаётся канал с меткой «YR» и форматом YR1. " +
+      "Его можно найти через поиск рядом."));
 
-    root.addView(sectionLabel(context, "Основное"));
+    root.addView(section(context, "Основное"));
     titleInput = field(context, "Название *", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
     root.addView(titleInput);
-
     priceInput = field(context, "Цена, ₽/мес", InputType.TYPE_CLASS_NUMBER);
     root.addView(priceInput);
 
-    root.addView(sectionLabel(context, "Геолокация"));
+    LinearLayout row = new LinearLayout(context);
+    row.setOrientation(LinearLayout.HORIZONTAL);
+    roomsInput = field(context, "Комнат", InputType.TYPE_CLASS_NUMBER);
+    row.addView(roomsInput, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+    areaInput = field(context, "Площадь, м²", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+    LinearLayout.LayoutParams aLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    aLp.leftMargin = Screen.dp(8f);
+    row.addView(areaInput, aLp);
+    root.addView(row);
+
+    root.addView(section(context, "Геолокация"));
     addressInput = field(context, "Адрес / район *", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
     root.addView(addressInput);
 
@@ -110,16 +112,14 @@ public class YaRyadomCreateController extends ViewController<Void> {
     coords.addView(lngInput, lngLp);
     root.addView(coords);
 
-    // Подсказка с примером координат (Таллинн по умолчанию можно не ставить)
-    TextView geoHint = new TextView(context);
-    geoHint.setText("Координаты можно скопировать из карт. Пример: 59.437 24.753");
-    geoHint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
-    geoHint.setTextColor(Theme.getColor(ColorId.textLight));
-    geoHint.setPadding(0, 0, 0, Screen.dp(8f));
-    root.addView(geoHint);
+    if (!Double.isNaN(prefillLat)) latInput.setText(String.valueOf(prefillLat));
+    if (!Double.isNaN(prefillLng)) lngInput.setText(String.valueOf(prefillLng));
 
-    root.addView(sectionLabel(context, "Описание"));
-    descriptionInput = field(context, "Комнаты, площадь, условия…", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+    root.addView(hint(context, "Координаты из карт. Если geo недоступен — канал создастся без метки, данные останутся в описании YR1."));
+
+    root.addView(section(context, "Описание"));
+    descriptionInput = field(context, "Условия, этаж, подробности…",
+      InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
     descriptionInput.setMinLines(3);
     descriptionInput.setMaxLines(6);
     descriptionInput.setSingleLine(false);
@@ -127,160 +127,143 @@ public class YaRyadomCreateController extends ViewController<Void> {
     descriptionInput.setImeOptions(EditorInfo.IME_FLAG_NO_ENTER_ACTION);
     root.addView(descriptionInput);
 
-    TextView hint = new TextView(context);
-    hint.setText("Будет создан канал с геолокацией. Его можно найти через поиск «рядом».");
-    hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
-    hint.setTextColor(Theme.getColor(ColorId.textLight));
-    hint.setPadding(0, Screen.dp(8f), 0, Screen.dp(16f));
-    root.addView(hint);
-
-    submitBtn = makePrimaryButton(context, "Создать канал-объявление");
-    submitBtn.setOnClickListener(v -> submitForm());
+    submitBtn = primaryBtn(context, "Опубликовать");
+    submitBtn.setOnClickListener(v -> submit());
     root.addView(submitBtn);
 
-    TextView cancel = makeSecondaryButton(context, "Отмена");
+    TextView cancel = secondaryBtn(context, "Отмена");
     cancel.setOnClickListener(v -> navigateBack());
-    LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(
+    LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(
       ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-    cancelLp.topMargin = Screen.dp(8f);
-    root.addView(cancel, cancelLp);
+    cLp.topMargin = Screen.dp(8f);
+    root.addView(cancel, cLp);
 
     scroll.addView(root);
     return scroll;
   }
 
-  private void submitForm () {
+  private void submit () {
     if (submitting) return;
 
-    String title = textOf(titleInput);
-    String price = textOf(priceInput);
-    String address = textOf(addressInput);
-    String latStr = textOf(latInput);
-    String lngStr = textOf(lngInput);
-    String description = textOf(descriptionInput);
+    YaRyadomFormat.ListingData d = new YaRyadomFormat.ListingData();
+    d.title = text(titleInput);
+    d.price = text(priceInput);
+    d.rooms = text(roomsInput);
+    d.area = text(areaInput);
+    d.address = text(addressInput);
+    d.description = text(descriptionInput);
 
-    if (StringUtils.isEmpty(title)) {
+    if (StringUtils.isEmpty(d.title)) {
       UI.showToast("Укажите название", Toast.LENGTH_SHORT);
       titleInput.requestFocus();
       return;
     }
-    if (StringUtils.isEmpty(address)) {
+    if (StringUtils.isEmpty(d.address)) {
       UI.showToast("Укажите адрес", Toast.LENGTH_SHORT);
       addressInput.requestFocus();
       return;
     }
-
-    double lat, lng;
     try {
-      lat = Double.parseDouble(latStr.replace(',', '.'));
-      lng = Double.parseDouble(lngStr.replace(',', '.'));
+      d.lat = Double.parseDouble(text(latInput).replace(',', '.'));
+      d.lng = Double.parseDouble(text(lngInput).replace(',', '.'));
     } catch (Exception e) {
       UI.showToast("Укажите широту и долготу", Toast.LENGTH_SHORT);
       return;
     }
-
-    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    if (d.lat < -90 || d.lat > 90 || d.lng < -180 || d.lng > 180) {
       UI.showToast("Некорректные координаты", Toast.LENGTH_SHORT);
       return;
     }
 
-    StringBuilder desc = new StringBuilder();
-    if (!StringUtils.isEmpty(price)) {
-      desc.append(price.contains("₽") ? price : price + " ₽/мес");
-      desc.append('\n');
-    }
-    if (!StringUtils.isEmpty(description)) {
-      desc.append(description);
-    }
-    if (desc.length() == 0) {
-      desc.append("Объявление «Я рядом»");
-    }
-
     submitting = true;
     submitBtn.setEnabled(false);
-    submitBtn.setText("Создание…");
+    submitBtn.setText("Публикация…");
 
-    YaRyadomGeo.createListingChannel(tdlib, title, desc.toString(), lat, lng, address,
+    YaRyadomGeo.createListingChannel(tdlib, d,
       chatId -> {
         submitting = false;
-        UI.showToast("Канал создан", Toast.LENGTH_SHORT);
-        if (listener != null) listener.onChannelCreated(chatId, title);
-        // Открыть созданный канал
+        UI.showToast("Объявление опубликовано", Toast.LENGTH_SHORT);
+        if (listener != null) listener.onChannelCreated(chatId, YaRyadomFormat.buildChannelTitle(d));
         tdlib.ui().openChat(this, chatId, null);
       },
       error -> {
         submitting = false;
         submitBtn.setEnabled(true);
-        submitBtn.setText("Создать канал-объявление");
-        UI.showToast("Ошибка: " + error, Toast.LENGTH_LONG);
+        submitBtn.setText("Опубликовать");
+        UI.showToast(error, Toast.LENGTH_LONG);
       }
     );
   }
 
-  private static String textOf (EditText edit) {
-    return edit.getText() != null ? edit.getText().toString().trim() : "";
+  private static String text (EditText e) {
+    return e.getText() != null ? e.getText().toString().trim() : "";
   }
 
-  private TextView sectionLabel (Context context, String text) {
-    TextView label = new TextView(context);
-    label.setText(text);
-    label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
-    label.setTypeface(Typeface.DEFAULT_BOLD);
-    label.setTextColor(Theme.getColor(ColorId.textLight));
-    label.setPadding(0, Screen.dp(12f), 0, Screen.dp(6f));
-    return label;
+  private TextView section (Context c, String t) {
+    TextView v = new TextView(c);
+    v.setText(t);
+    v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+    v.setTypeface(Typeface.DEFAULT_BOLD);
+    v.setTextColor(Theme.getColor(ColorId.textLight));
+    v.setPadding(0, Screen.dp(12f), 0, Screen.dp(6f));
+    return v;
   }
 
-  private EditText field (Context context, String hint, int inputType) {
-    EditText edit = new EditText(context);
-    edit.setHint(hint);
-    edit.setInputType(inputType);
-    edit.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
-    edit.setTextColor(Theme.getColor(ColorId.text));
-    edit.setHintTextColor(Theme.getColor(ColorId.textLight));
-    edit.setSingleLine(true);
-    edit.setPadding(Screen.dp(14f), Screen.dp(12f), Screen.dp(14f), Screen.dp(12f));
+  private TextView hint (Context c, String t) {
+    TextView v = new TextView(c);
+    v.setText(t);
+    v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+    v.setTextColor(Theme.getColor(ColorId.textLight));
+    v.setPadding(0, Screen.dp(4f), 0, Screen.dp(8f));
+    return v;
+  }
 
+  private EditText field (Context c, String hint, int type) {
+    EditText e = new EditText(c);
+    e.setHint(hint);
+    e.setInputType(type);
+    e.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
+    e.setTextColor(Theme.getColor(ColorId.text));
+    e.setHintTextColor(Theme.getColor(ColorId.textLight));
+    e.setSingleLine(true);
+    e.setPadding(Screen.dp(14f), Screen.dp(12f), Screen.dp(14f), Screen.dp(12f));
     GradientDrawable bg = new GradientDrawable();
     bg.setCornerRadius(Screen.dp(10f));
     bg.setColor(Theme.getColor(ColorId.filling));
-    edit.setBackground(bg);
-
+    e.setBackground(bg);
     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
       ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     lp.bottomMargin = Screen.dp(8f);
-    edit.setLayoutParams(lp);
-    return edit;
+    e.setLayoutParams(lp);
+    return e;
   }
 
-  private TextView makePrimaryButton (Context context, String text) {
-    TextView btn = new TextView(context);
-    btn.setText(text);
-    btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
-    btn.setTypeface(Typeface.DEFAULT_BOLD);
-    btn.setGravity(Gravity.CENTER);
-    btn.setTextColor(0xFFFFFFFF);
-    btn.setPadding(Screen.dp(16f), Screen.dp(14f), Screen.dp(16f), Screen.dp(14f));
-
+  private TextView primaryBtn (Context c, String t) {
+    TextView b = new TextView(c);
+    b.setText(t);
+    b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
+    b.setTypeface(Typeface.DEFAULT_BOLD);
+    b.setGravity(Gravity.CENTER);
+    b.setTextColor(0xFFFFFFFF);
+    b.setPadding(Screen.dp(16f), Screen.dp(14f), Screen.dp(16f), Screen.dp(14f));
     GradientDrawable bg = new GradientDrawable();
     bg.setCornerRadius(Screen.dp(12f));
     bg.setColor(0xFF0088CC);
-    btn.setBackground(bg);
-    return btn;
+    b.setBackground(bg);
+    return b;
   }
 
-  private TextView makeSecondaryButton (Context context, String text) {
-    TextView btn = new TextView(context);
-    btn.setText(text);
-    btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f);
-    btn.setGravity(Gravity.CENTER);
-    btn.setTextColor(Theme.getColor(ColorId.text));
-    btn.setPadding(Screen.dp(16f), Screen.dp(12f), Screen.dp(16f), Screen.dp(12f));
-
+  private TextView secondaryBtn (Context c, String t) {
+    TextView b = new TextView(c);
+    b.setText(t);
+    b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f);
+    b.setGravity(Gravity.CENTER);
+    b.setTextColor(Theme.getColor(ColorId.text));
+    b.setPadding(Screen.dp(16f), Screen.dp(12f), Screen.dp(16f), Screen.dp(12f));
     GradientDrawable bg = new GradientDrawable();
     bg.setCornerRadius(Screen.dp(12f));
     bg.setColor(Theme.getColor(ColorId.filling));
-    btn.setBackground(bg);
-    return btn;
+    b.setBackground(bg);
+    return b;
   }
 }
