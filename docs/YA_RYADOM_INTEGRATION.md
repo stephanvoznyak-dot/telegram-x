@@ -1,25 +1,36 @@
-# Интеграция «Я рядом» в Telegram X
+# «Я рядом» — интеграция в Telegram X
 
-## Статус
+## Модель
 
-| Этап | Статус |
-|------|--------|
-| Форк Telegram X | Готов |
-| Контроллер `YaRyadomController` | **Наполнен** |
-| ID ресурсов | Готовы (`ids_yaryadom.xml`) |
-| Пункт в боковом меню | Нужно применить `docs/RESTORE_AND_PATCH.sh` |
+| Сущность | Реализация |
+|----------|------------|
+| Объявление | Supergroup-канал с `ChatLocation` + описание **YR1** |
+| Поиск | `TdApi.SearchChatsNearby` + кэш 90 с |
+| Фильтр | Только каналы с маркером `YR ·` / `#ЯРядом` |
+| Избранное | Одно сообщение `YR_FAV1` в Saved Messages (edit + debounce 1.2 с) |
+| Размещение | `CreateNewSupergroupChat` + geo, fallback без geo |
 
-## Что есть на экране «Я рядом»
+## Формат YR1
 
-- Поле поиска (город, район, метро)
-- Кнопка «Найти» с фильтрацией демо-объявлений
-- Кнопки «Разместить» и «Избранное» (заглушки)
-- Список карточек объявлений:
-  - заголовок, цена, площадь, этаж, район
-  - кнопка «Написать»
-- 5 демо-объявлений для проверки UI
+```
+#ЯРядом
+YR1|title=...|price=...|rooms=...|area=...|address=...|lat=...|lng=...|desc=...
+```
 
-## Как подключить пункт меню
+Название канала: `YR · {title}`
+
+## Файлы
+
+| Файл | Роль |
+|------|------|
+| `YaRyadomFormat.java` | Парсер/билдер YR1, избранное payload |
+| `YaRyadomGeo.java` | TDLib nearby, create, favorites persist |
+| `YaRyadomController.java` | UI поиска, GPS, фильтр, список |
+| `YaRyadomCreateController.java` | Форма публикации |
+| `ids_yaryadom.xml` | `btn_yaryadom`, `controller_yaryadom` |
+| `docs/RESTORE_AND_PATCH.sh` | Пункт в боковом меню |
+
+## Меню
 
 ```bash
 chmod +x docs/RESTORE_AND_PATCH.sh
@@ -27,11 +38,26 @@ chmod +x docs/RESTORE_AND_PATCH.sh
 ./gradlew assembleLatestUniversalDebug
 ```
 
-Подробности: `docs/PATCH_YARYADOM_DRAWER.md`
+## Оптимизации (сделано)
 
-## Следующие шаги
+- Кэш nearby 90 секунд
+- Фильтр «только YR» / «все location-каналы»
+- GPS last-known для координат
+- Debounce записи избранного + `editMessageText`
+- Fallback создания канала без geo
+- Человекочитаемые ошибки (flood, location)
+- Prefill координат в форму из поиска
+- Блокировка кнопки на время поиска/публикации
 
-1. Подключить реальный backend с объявлениями
-2. Открытие чата с автором через TDLib
-3. Форма размещения объявления
-4. Избранное и заявки
+## Ограничения Telegram
+
+- Location-группы зависят от политики TDLib/аккаунта
+- Nearby видит только чаты с геометкой в радиусе сервера
+- Канал на каждое объявление — trade-off MVP
+
+## Дальше
+
+- Каталог-канал + сообщения вместо N каналов
+- Выбор точки на карте TGX
+- RecyclerView / ListItem в стиле TGX
+- GetSupergroupFullInfo для парсинга description
