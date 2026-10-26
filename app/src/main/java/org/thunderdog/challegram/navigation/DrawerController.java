@@ -1,25 +1,32 @@
 /*
- * This file is a part of Telegram X
- * Copyright © 2014 (tgx-android@pm.me)
+ * Telegram X + «Я рядом»
  *
- * RESTORE IN PROGRESS - full content follows in next commit if this fails
- * Please apply docs/PATCH_YARYADOM_DRAWER.md
+ * ВАЖНО: это временная заглушка.
+ * Перед сборкой APK обязательно выполните из корня репозитория:
+ *
+ *   chmod +x docs/RESTORE_AND_PATCH.sh
+ *   ./docs/RESTORE_AND_PATCH.sh
+ *
+ * Скрипт восстановит полный DrawerController из upstream Telegram X
+ * и добавит пункт меню «Я рядом».
+ *
+ * См. также: docs/BUILD_APK.md, docs/PATCH_YARYADOM_DRAWER.md
  */
 package org.thunderdog.challegram.navigation;
-
-// Temporary minimal stub to unbreak the repository.
-// Full restored file with Ya Ryadom integration is in docs/ and local patch.
-// Apply the patch from docs/PATCH_YARYADOM_DRAWER.md after restoring from upstream:
-// git checkout TGX-Android/Telegram-X -- app/src/main/java/org/thunderdog/challegram/navigation/DrawerController.java
 
 import android.content.Context;
 import android.view.View;
 
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.telegram.Tdlib;
 
+/**
+ * Stub. Run docs/RESTORE_AND_PATCH.sh before building.
+ */
 public class DrawerController extends ViewController<Void> {
-  public DrawerController (Context context) {
-    super(context, null);
+
+  public DrawerController (Context context, Tdlib tdlib) {
+    super(context, tdlib);
   }
 
   @Override
