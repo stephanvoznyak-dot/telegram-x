@@ -34,35 +34,30 @@
 YR1|title=...|price=...|rooms=...|area=...|address=...|lat=...|lng=...|desc=...
 ```
 
-Документация: [docs/YA_RYADOM_INTEGRATION.md](docs/YA_RYADOM_INTEGRATION.md)  
-Патч меню: [docs/RESTORE_AND_PATCH.sh](docs/RESTORE_AND_PATCH.sh)
+- Интеграция: [docs/YA_RYADOM_INTEGRATION.md](docs/YA_RYADOM_INTEGRATION.md)
+- Сборка APK: [docs/BUILD_APK.md](docs/BUILD_APK.md)
+- Патч меню: [docs/RESTORE_AND_PATCH.sh](docs/RESTORE_AND_PATCH.sh)
 
 ## Статус
 
-**Рабочий MVP** (октябрь 2026). Код модуля и история коммитов — в этом форке.
-
----
-
-# Telegram X (upstream)
-
-Официальный альтернативный клиент Telegram на [TDLib](https://core.telegram.org/tdlib).
-
-* [Google Play](https://play.google.com/store/apps/details?id=org.thunderdog.challegram)
-* [APKs / Build Info](https://t.me/tgx_log)
-* Upstream: [TGX-Android/Telegram-X](https://github.com/TGX-Android/Telegram-X)
+**Рабочий MVP** (октябрь 2026). Код модуля готов. Перед сборкой обязателен шаг `RESTORE_AND_PATCH.sh` (восстанавливает Drawer + пункт «Я рядом»).
 
 ## Сборка
 
 ```bash
 git clone --recursive https://github.com/stephanvoznyak-dot/telegram-x.git tgx
 cd tgx
+
+chmod +x docs/RESTORE_AND_PATCH.sh
+./docs/RESTORE_AND_PATCH.sh
+
 # local.properties: sdk.dir, telegram.api_id, telegram.api_hash
+# Ключи: https://core.telegram.org/api/obtaining_api_id
+
 ./gradlew assembleLatestUniversalDebug
 ```
 
 Требования: JDK 17+, Android SDK/NDK, ≥8 GB RAM, клон с `--recursive`.
-
-Подробные инструкции upstream — в истории README и в [официальном репозитории](https://github.com/TGX-Android/Telegram-X).
 
 ## Лицензия
 
